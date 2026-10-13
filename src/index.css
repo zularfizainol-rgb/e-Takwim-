@@ -6,33 +6,82 @@
   }
 }
 
+/* GAYA KHAS CETAKAN (PRINT / PDF) */
 @media print {
   @page {
     size: A4 portrait;
-    margin: 8mm;
+    margin: 6mm 7mm;
   }
 
-  body {
-    background-color: #ffffff !important;
-    color: #000000 !important;
-  }
-
-  /* Sembunyikan elemen paparan skrin ketika mencetak */
+  /* 1. Sembunyikan SEMUA elemen antaramuka sistem secara mutlak */
+  #screen-ui,
+  #screen-ui *,
   header,
   nav,
   main,
   footer,
-  .no-print {
+  aside,
+  dialog,
+  .no-print,
+  [role="dialog"] {
     display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    width: 0 !important;
+    max-height: 0 !important;
+    max-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    overflow: hidden !important;
+    position: absolute !important;
+    left: -99999px !important;
+    top: -99999px !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
   }
 
-  /* Paparkan hanya kawasan cetakan rasmi */
+  html,
+  body {
+    background-color: #ffffff !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* 2. Paparkan HANYA kawasan cetakan rasmi bermula dari KEMENTERIAN PENDIDIKAN MALAYSIA */
   #print-area {
     display: block !important;
+    visibility: visible !important;
+    position: static !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    opacity: 1 !important;
   }
 
-  .page-break-after-always {
-    page-break-after: always;
-    break-after: page;
+  #print-area * {
+    visibility: visible !important;
+  }
+
+  .print-page {
+    page-break-after: always !important;
+    break-after: page !important;
+    break-inside: avoid !important;
+    margin: 0 !important;
+    padding-top: 2mm !important;
+    padding-bottom: 2mm !important;
+  }
+
+  .print-page:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
   }
 }

@@ -93,19 +93,19 @@ export const FilterBar: React.FC<FilterBarProps> = ({
         {isViewOnly ? (
           <div className="flex items-center gap-1.5 text-slate-500">
             <span className="font-semibold text-slate-700">Mod Guru (Paparan Sahaja):</span>
-            <span>Anda boleh melihat, mencari dan memuat turun takwim sekolah.</span>
+            <span>Anda boleh melihat, mencari dan mencetak PDF takwim sekolah.</span>
             <button 
               onClick={onOpenLoginModal} 
               className="ml-1 text-[#0b6b5c] hover:underline font-semibold"
             >
-              Log masuk GPK untuk mengisi takwim &rarr;
+              Log masuk Mod GPK untuk mengisi takwim &rarr;
             </button>
           </div>
         ) : (
           <div className="flex items-center gap-1.5 text-teal-900 font-medium">
             <CheckCircle2 className="w-3.5 h-3.5 text-teal-600 shrink-0" />
             <span>
-              <strong>Mod GPK Aktif:</strong> Taip terus di dalam sel jadual untuk mengisi atau mengedit program (satu program setiap baris). Klik tarikh untuk menukar jenis cuti.
+              <strong>Mod GPK Aktif:</strong> Anda boleh mengedit takwim, muat semula dari Google Sheet, muat turun data pelbagai format, dan tetapan sekolah.
             </span>
           </div>
         )}

@@ -30,6 +30,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { GoogleSheetModal } from './components/GoogleSheetModal';
 import { LoginModal } from './components/LoginModal';
 import { PrintTakwimView } from './components/PrintTakwimView';
+import { PrintModal } from './components/PrintModal';
 
 const DEFAULT_SETTINGS: SchoolSettings = {
   sekolah: 'SK Seri Bintang Selatan',
@@ -74,6 +75,9 @@ export default function App() {
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [googleSheetModalOpen, setGoogleSheetModalOpen] = useState(false);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
+  const [printModalOpen, setPrintModalOpen] = useState(false);
+  const [printMonth, setPrintMonth] = useState<number | 'all'>('all');
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
 
   const allDatesOfYear = useMemo(() => {
     return getAllDatesOfYear(settings.tahun);
@@ -430,163 +434,213 @@ export default function App() {
     };
   }, [currentMonth, allDatesOfYear, settings.tahun, rows, isWeekendFn, weekKeyFn, weeksMap]);
 
+  // Pelaksanaan cetakan rasmi KPM (Hanya bermula dari Kementerian Pendidikan Malaysia)
+  const handleExecutePrint = useCallback((scope: number | 'all') => {
+    setPrintMonth(scope);
+    // Beri masa untuk rendering DOM sebelum print dialog pelayar dibuka
+    setTimeout(() => {
+      window.print();
+    }, 120);
+  }, []);
+
+  // Selaraskan jika pengguna menekan kekunci pintas Ctrl+P
+  useEffect(() => {
+    const handleBeforePrint = () => {
+      setPrintMonth(prev => {
+        if (currentMonth >= 0 && currentMonth < 12 && prev === 'all') {
+          return currentMonth;
+        }
+        return prev;
+      });
+    };
+    window.addEventListener('beforeprint', handleBeforePrint);
+    return () => window.removeEventListener('beforeprint', handleBeforePrint);
+  }, [currentMonth]);
+
   return (
-    <div className="min-h-screen bg-[#f4f7f6] text-slate-800 flex flex-col font-sans selection:bg-teal-500 selection:text-white">
-      {/* 1. Bar Navigasi Utama */}
-      <Navbar
-        settings={settings}
-        currentRole={currentRole}
-        syncState={syncState}
-        syncMessage={syncMessage}
-        onRefresh={() => loadData(false)}
-        onOpenAddModal={() => setAddModalOpen(true)}
-        onOpenSettingsModal={() => setSettingsModalOpen(true)}
-        onOpenLoginModal={() => setLoginModalOpen(true)}
-        onLogoutRole={() => setCurrentRole('GURU')}
-        onExportCSV={() => exportToCSV(rows, allDatesOfYear, weeksMap, weekKeyFn, settings)}
-        onExportExcel={() => exportToExcel(rows, allDatesOfYear, weeksMap, weekKeyFn, isWeekendFn, settings)}
-        onExportICal={() => exportToICal(rows, allDatesOfYear, settings)}
-        onPrint={() => {
-          setTimeout(() => {
-            window.print();
-          }, 80);
-        }}
-        onSwitchYear={handleSwitchYear}
-      />
+    <div className="min-h-screen bg-[#f4f7f6] text-slate-800 font-sans selection:bg-teal-500 selection:text-white">
+      {/* 
+        ========================================================================
+        1. PAPARAN ANTARAMUKA SISTEM (DISEMBUNYIKAN SECARA MUTLAK KETIKA CETAK)
+        ========================================================================
+      */}
+      <div id="screen-ui" className={`${isPreviewMode ? 'hidden' : 'flex flex-col min-h-screen'} print:hidden`}>
+        {/* 1. Bar Navigasi Utama */}
+        <Navbar
+          settings={settings}
+          currentRole={currentRole}
+          syncState={syncState}
+          syncMessage={syncMessage}
+          onRefresh={() => loadData(false)}
+          onOpenAddModal={() => setAddModalOpen(true)}
+          onOpenSettingsModal={() => setSettingsModalOpen(true)}
+          onOpenLoginModal={() => setLoginModalOpen(true)}
+          onLogoutRole={() => setCurrentRole('GURU')}
+          onExportCSV={() => exportToCSV(rows, allDatesOfYear, weeksMap, weekKeyFn, settings)}
+          onExportExcel={() => exportToExcel(rows, allDatesOfYear, weeksMap, weekKeyFn, isWeekendFn, settings)}
+          onExportICal={() => exportToICal(rows, allDatesOfYear, settings)}
+          onPrint={() => setPrintModalOpen(true)}
+          onSwitchYear={handleSwitchYear}
+        />
 
-      {/* 2. Tab Bulan & Ringkasan Metrik */}
-      <MonthTabs
-        currentMonth={currentMonth}
-        onSelectMonth={m => setCurrentMonth(m)}
-        stats={stats}
-      />
+        {/* 2. Tab Bulan & Ringkasan Metrik */}
+        <MonthTabs
+          currentMonth={currentMonth}
+          onSelectMonth={m => setCurrentMonth(m)}
+          stats={stats}
+        />
 
-      {/* 3. Bar Penapis & Carian Pantas */}
-      <FilterBar
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        selectedUnit={selectedUnit}
-        onSelectUnit={setSelectedUnit}
-        selectedDayType={selectedDayType}
-        onSelectDayType={setSelectedDayType}
-        currentRole={currentRole}
-        onOpenLoginModal={() => setLoginModalOpen(true)}
-      />
+        {/* 3. Bar Penapis & Carian Pantas */}
+        <FilterBar
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          selectedUnit={selectedUnit}
+          onSelectUnit={setSelectedUnit}
+          selectedDayType={selectedDayType}
+          onSelectDayType={setSelectedDayType}
+          currentRole={currentRole}
+          onOpenLoginModal={() => setLoginModalOpen(true)}
+        />
 
-      {/* 4. Ruang Utama Jadual Takwim */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-5">
-        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-          <div>
-            <h2 className="text-xl font-bold text-slate-900 tracking-tight">
-              {currentMonth === -1 ? `Takwim Penuh Setahun ${settings.tahun}` : `Bulan ${MONTH_NAMES[currentMonth]} ${settings.tahun}`}
-            </h2>
-            <p className="text-xs text-slate-500">
-              {settings.sekolah || 'Sekolah'} · Kumpulan {settings.kumpulan} (Hari mula persekolahan: {settings.kumpulan === 'A' ? 'Ahad' : 'Isnin'})
-            </p>
+        {/* 4. Ruang Utama Jadual Takwim */}
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-5">
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+            <div>
+              <h2 className="text-xl font-bold text-slate-900 tracking-tight">
+                {currentMonth === -1 ? `Takwim Penuh Setahun ${settings.tahun}` : `Bulan ${MONTH_NAMES[currentMonth]} ${settings.tahun}`}
+              </h2>
+              <p className="text-xs text-slate-500">
+                {settings.sekolah || 'Sekolah'} · Kumpulan {settings.kumpulan} (Hari mula persekolahan: {settings.kumpulan === 'A' ? 'Ahad' : 'Isnin'})
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold bg-red-100 text-red-900 border border-red-300 shadow-xs">
+                <span className="w-2 h-2 rounded-full bg-red-600"></span>
+                Cuti Umum
+              </span>
+              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-950 border border-amber-400 shadow-xs">
+                <span className="w-2 h-2 rounded-full bg-amber-600"></span>
+                Cuti Penggal Persekolahan KPM
+              </span>
+              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold bg-indigo-100 text-indigo-950 border border-indigo-300 shadow-xs">
+                <span className="w-2 h-2 rounded-full bg-indigo-600"></span>
+                Cuti Tambahan KPM / Peristiwa
+              </span>
+              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold bg-slate-200 text-slate-800 border border-slate-300">
+                <span className="w-2 h-2 rounded-full bg-slate-500"></span>
+                Hujung Minggu
+              </span>
+              {currentRole !== 'GURU' && (
+                <button
+                  onClick={() => handleResetOfficialHolidays()}
+                  className="px-2 py-0.5 rounded text-[11px] font-semibold bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-300 transition-colors"
+                  title="Segerakkan semula semua tarikh cuti rasmi KPM"
+                >
+                  Kemaskini Cuti KPM ↺
+                </button>
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold bg-red-100 text-red-900 border border-red-300 shadow-xs">
-              <span className="w-2 h-2 rounded-full bg-red-600"></span>
-              Cuti Umum
-            </span>
-            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-950 border border-amber-400 shadow-xs">
-              <span className="w-2 h-2 rounded-full bg-amber-600"></span>
-              Cuti Penggal Persekolahan KPM
-            </span>
-            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold bg-indigo-100 text-indigo-950 border border-indigo-300 shadow-xs">
-              <span className="w-2 h-2 rounded-full bg-indigo-600"></span>
-              Cuti Tambahan KPM / Peristiwa
-            </span>
-            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold bg-slate-200 text-slate-800 border border-slate-300">
-              <span className="w-2 h-2 rounded-full bg-slate-500"></span>
-              Hujung Minggu
-            </span>
-            <button
-              onClick={() => handleResetOfficialHolidays()}
-              className="px-2 py-0.5 rounded text-[11px] font-semibold bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-300 transition-colors"
-              title="Segerakkan semula semua tarikh cuti rasmi KPM"
-            >
-              Kemaskini Cuti KPM ↺
-            </button>
-          </div>
-        </div>
+          {/* Jadual Takwim KPM */}
+          <TakwimTable
+            datesToRender={datesToRender}
+            rows={rows}
+            weeksMap={weeksMap}
+            weekKeyFn={weekKeyFn}
+            isWeekendFn={isWeekendFn}
+            schoolGroup={settings.kumpulan}
+            currentRole={currentRole}
+            selectedUnit={selectedUnit}
+            searchQuery={searchQuery}
+            onCellChange={handleCellChange}
+            onOpenDayModal={dateStr => setEditDayDate(dateStr)}
+          />
+        </main>
 
-        {/* Jadual Takwim KPM */}
-        <TakwimTable
-          datesToRender={datesToRender}
+        {/* 5. Footer */}
+        <footer className="bg-white border-t border-slate-200 py-3.5 mt-8 text-center text-xs text-slate-500">
+          <div className="max-w-7xl mx-auto px-4 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <strong>e-Takwim Sekolah KPM</strong> · Modul Pengisian Bersepadu GPK Pentadbiran, Kurikulum, HEM & Kokurikulum.
+            </div>
+            <div>
+              Data terselaras dengan Google Sheets & Google Apps Script.
+            </div>
+          </div>
+        </footer>
+
+        {/* 6. Dialog Modals */}
+        <AddProgramModal
+          isOpen={addModalOpen}
+          onClose={() => setAddModalOpen(false)}
           rows={rows}
+          schoolGroup={settings.kumpulan}
+          year={settings.tahun}
+          currentMonth={currentMonth}
+          isWeekendFn={isWeekendFn}
+          onSavePrograms={handleSaveBulkPrograms}
+        />
+
+        <EditDayModal
+          isOpen={Boolean(editDayDate)}
+          dateStr={editDayDate}
+          onClose={() => setEditDayDate(null)}
+          rows={rows}
+          onSaveDay={handleSaveDay}
+        />
+
+        <SettingsModal
+          isOpen={settingsModalOpen}
+          onClose={() => setSettingsModalOpen(false)}
+          settings={settings}
+          rows={rows}
+          onSaveSettings={handleSaveSettings}
+          onResetOfficialHolidays={handleResetOfficialHolidays}
+          onForceSyncCloud={() => loadData(false)}
+        />
+
+        <GoogleSheetModal
+          isOpen={googleSheetModalOpen}
+          onClose={() => setGoogleSheetModalOpen(false)}
+          settings={settings}
+          rows={rows}
+          onSaveUrl={handleSaveGoogleUrl}
+          onForceSyncCloud={() => loadData(false)}
+        />
+
+        <LoginModal
+          isOpen={loginModalOpen}
+          onClose={() => setLoginModalOpen(false)}
+          expectedCode={settings.kodEdit}
+          onLoginSuccess={role => setCurrentRole(role)}
+        />
+
+        <PrintModal
+          isOpen={printModalOpen}
+          onClose={() => setPrintModalOpen(false)}
+          currentMonth={currentMonth}
+          settings={settings}
+          rows={rows}
+          allDates={allDatesOfYear}
           weeksMap={weeksMap}
           weekKeyFn={weekKeyFn}
           isWeekendFn={isWeekendFn}
-          schoolGroup={settings.kumpulan}
-          currentRole={currentRole}
-          selectedUnit={selectedUnit}
-          searchQuery={searchQuery}
-          onCellChange={handleCellChange}
-          onOpenDayModal={dateStr => setEditDayDate(dateStr)}
+          onExecuteBrowserPrint={handleExecutePrint}
+          onOpenPreview={(scope) => {
+            setPrintMonth(scope);
+            setIsPreviewMode(true);
+          }}
         />
-      </main>
+      </div>
 
-      {/* 5. Footer */}
-      <footer className="bg-white border-t border-slate-200 py-3.5 mt-8 text-center text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto px-4 flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <strong>e-Takwim Sekolah KPM</strong> · Modul Pengisian Bersepadu GPK Pentadbiran, Kurikulum, HEM & Kokurikulum.
-          </div>
-          <div>
-            Data terselaras dengan Google Sheets & Google Apps Script.
-          </div>
-        </div>
-      </footer>
-
-      {/* 6. Dialog Modals */}
-      <AddProgramModal
-        isOpen={addModalOpen}
-        onClose={() => setAddModalOpen(false)}
-        rows={rows}
-        schoolGroup={settings.kumpulan}
-        year={settings.tahun}
-        currentMonth={currentMonth}
-        isWeekendFn={isWeekendFn}
-        onSavePrograms={handleSaveBulkPrograms}
-      />
-
-      <EditDayModal
-        isOpen={Boolean(editDayDate)}
-        dateStr={editDayDate}
-        onClose={() => setEditDayDate(null)}
-        rows={rows}
-        onSaveDay={handleSaveDay}
-      />
-
-      <SettingsModal
-        isOpen={settingsModalOpen}
-        onClose={() => setSettingsModalOpen(false)}
-        settings={settings}
-        rows={rows}
-        onSaveSettings={handleSaveSettings}
-        onResetOfficialHolidays={handleResetOfficialHolidays}
-        onForceSyncCloud={() => loadData(false)}
-      />
-
-      <GoogleSheetModal
-        isOpen={googleSheetModalOpen}
-        onClose={() => setGoogleSheetModalOpen(false)}
-        settings={settings}
-        rows={rows}
-        onSaveUrl={handleSaveGoogleUrl}
-        onForceSyncCloud={() => loadData(false)}
-      />
-
-      <LoginModal
-        isOpen={loginModalOpen}
-        onClose={() => setLoginModalOpen(false)}
-        expectedCode={settings.kodEdit}
-        onLoginSuccess={role => setCurrentRole(role)}
-      />
-
-      {/* 7. Format Cetakan Rasmi KPM (Print / PDF) */}
+      {/* 
+        ========================================================================
+        2. FORMAT CETAKAN RASMI KPM (HANYA INI YANG DICETAK)
+           HANYA BERMULA DARI: KEMENTERIAN PENDIDIKAN MALAYSIA
+        ========================================================================
+      */}
       <PrintTakwimView
         allDates={allDatesOfYear}
         rows={rows}
@@ -594,6 +648,9 @@ export default function App() {
         weekKeyFn={weekKeyFn}
         isWeekendFn={isWeekendFn}
         settings={settings}
+        printMonth={printMonth}
+        isPreview={isPreviewMode}
+        onClosePreview={() => setIsPreviewMode(false)}
       />
     </div>
   );

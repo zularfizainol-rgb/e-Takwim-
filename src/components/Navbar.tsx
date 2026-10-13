@@ -157,125 +157,139 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Tindakan Takwim & Penjuru Sebelah Kanan */}
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap ml-auto">
-          {/* Status Penyelarasan */}
-          <div 
-            onClick={onOpenSettingsModal}
-            className="hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium cursor-pointer transition-colors bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700"
-            title="Klik untuk buka Tetapan & Sambungan Google Sheet"
-          >
-            {settings.googleWebAppUrl ? (
-              <Cloud className="w-3.5 h-3.5 text-teal-600" />
-            ) : (
-              <CloudOff className="w-3.5 h-3.5 text-amber-600" />
-            )}
-            <span className="max-w-[130px] truncate">{syncMessage}</span>
-          </div>
+          {/* Status Penyelarasan (Hanya Papar Dalam Mod GPK) */}
+          {!isViewOnly && (
+            <div 
+              onClick={onOpenSettingsModal}
+              className="hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium cursor-pointer transition-colors bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700"
+              title="Klik untuk buka Tetapan & Sambungan Google Sheet"
+            >
+              {settings.googleWebAppUrl ? (
+                <Cloud className="w-3.5 h-3.5 text-teal-600" />
+              ) : (
+                <CloudOff className="w-3.5 h-3.5 text-amber-600" />
+              )}
+              <span className="max-w-[130px] truncate">{syncMessage}</span>
+            </div>
+          )}
 
           {/* Butang Tindakan Kalendar */}
           <div className="flex items-center gap-1.5">
-            {/* Muat Semula */}
-            <button
-              onClick={onRefresh}
-              className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-md border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-medium flex items-center gap-1.5 transition-colors"
-              title="Ambil data terkini daripada Google Sheet atau Storan"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Muat Semula</span>
-            </button>
-
-            {/* Tambah Program (Hanya untuk GPK / Pentadbir) */}
+            {/* 1. JIKA DALAM MOD GPK: Muat Semula & Tambah Program */}
             {!isViewOnly && (
-              <button
-                onClick={onOpenAddModal}
-                className="px-2.5 py-1.5 rounded-md bg-[#0b6b5c] hover:bg-[#084f44] text-white text-xs font-medium flex items-center gap-1.5 shadow-xs transition-colors"
-              >
-                <PlusCircle className="w-3.5 h-3.5" />
-                <span className="whitespace-nowrap">Tambah Program</span>
-              </button>
+              <>
+                <button
+                  onClick={onRefresh}
+                  className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-md border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-medium flex items-center gap-1.5 transition-colors shadow-2xs"
+                  title="Ambil data terkini daripada Google Sheet atau Storan"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-slate-600" />
+                  <span className="hidden sm:inline">Muat Semula</span>
+                </button>
+
+                <button
+                  onClick={onOpenAddModal}
+                  className="px-2.5 py-1.5 rounded-md bg-[#0b6b5c] hover:bg-[#084f44] text-white text-xs font-medium flex items-center gap-1.5 shadow-xs transition-colors"
+                  title="Tambah program ke unit GPK"
+                >
+                  <PlusCircle className="w-3.5 h-3.5" />
+                  <span className="whitespace-nowrap">Tambah Program</span>
+                </button>
+              </>
             )}
 
-            {/* Butang Cetak Pantas */}
+            {/* 2. BUTANG CETAK PDF:
+                   - DALAM MOD GURU: SATU-SATUNYA BUTANG TINDAKAN YANG MENONJOL & JELAS
+                   - DALAM MOD GPK: Turut boleh diakses oleh GPK */}
             <button
               onClick={onPrint}
-              className="px-2.5 py-1.5 rounded-md border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-medium flex items-center gap-1.5 transition-colors"
+              className={`rounded-lg text-xs font-bold flex items-center gap-2 transition-all shadow-xs ${
+                isViewOnly
+                  ? 'px-4 py-2 bg-[#0b6b5c] hover:bg-[#084f44] text-white shadow-sm ring-2 ring-[#0b6b5c]/25'
+                  : 'px-2.5 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-700'
+              }`}
               title="Cetak Takwim atau Simpan sebagai PDF (A4 Rasmi KPM)"
             >
-              <Printer className="w-3.5 h-3.5 text-slate-600" />
-              <span className="hidden sm:inline">Cetak PDF</span>
+              <Printer className={`w-4 h-4 ${isViewOnly ? 'text-white' : 'text-slate-600'}`} />
+              <span className={isViewOnly ? 'text-xs sm:text-sm font-bold tracking-tight' : 'hidden sm:inline'}>
+                Cetak PDF
+              </span>
             </button>
 
-            {/* Menu Muat Turun */}
-            <div className="relative">
-              <button
-                onClick={() => setShowDownloadMenu(!showDownloadMenu)}
-                className="px-2.5 py-1.5 rounded-md border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-medium flex items-center gap-1.5 transition-colors"
-                title="Muat turun Excel, CSV atau iCalendar"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Muat Turun</span>
-              </button>
+            {/* 3. MENU MUAT TURUN: HANYA DALAM MOD GPK */}
+            {!isViewOnly && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowDownloadMenu(!showDownloadMenu)}
+                  className="px-2.5 py-1.5 rounded-md border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-medium flex items-center gap-1.5 transition-colors shadow-2xs"
+                  title="Muat turun Excel, CSV atau iCalendar"
+                >
+                  <Download className="w-3.5 h-3.5 text-slate-600" />
+                  <span className="hidden sm:inline">Muat Turun</span>
+                </button>
 
-              {showDownloadMenu && (
-                <>
-                  <div 
-                    className="fixed inset-0 z-40" 
-                    onClick={() => setShowDownloadMenu(false)} 
-                  />
-                  <div className="absolute right-0 mt-1.5 w-60 bg-white border border-slate-200 rounded-lg shadow-lg py-1.5 z-50 text-xs text-slate-700 animate-in fade-in zoom-in-95 duration-100">
-                    <button
-                      onClick={() => { setShowDownloadMenu(false); onPrint(); }}
-                      className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2"
-                    >
-                      <Printer className="w-4 h-4 text-slate-500" />
-                      <div>
-                        <div className="font-medium text-slate-800">Cetak / Simpan PDF (A4 Rasmi)</div>
-                        <div className="text-[11px] text-slate-500">Format surat siaran takwim KPM</div>
-                      </div>
-                    </button>
-                    <button
-                      onClick={() => { setShowDownloadMenu(false); onExportExcel(); }}
-                      className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2 border-t border-slate-100"
-                    >
-                      <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                      <div>
-                        <div className="font-medium text-slate-800">Muat Turun Excel (.xlsx)</div>
-                        <div className="text-[11px] text-slate-500">Lengkap dengan grid dan tajuk KPM</div>
-                      </div>
-                    </button>
-                    <button
-                      onClick={() => { setShowDownloadMenu(false); onExportCSV(); }}
-                      className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2 border-t border-slate-100"
-                    >
-                      <FileText className="w-4 h-4 text-blue-600" />
-                      <div>
-                        <div className="font-medium text-slate-800">Muat Turun CSV (Semua Data)</div>
-                        <div className="text-[11px] text-slate-500">Sesuai untuk pangkalan data</div>
-                      </div>
-                    </button>
-                    <button
-                      onClick={() => { setShowDownloadMenu(false); onExportICal(); }}
-                      className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2 border-t border-slate-100"
-                    >
-                      <CalendarDays className="w-4 h-4 text-indigo-600" />
-                      <div>
-                        <div className="font-medium text-slate-800">Eksport iCalendar (.ics)</div>
-                        <div className="text-[11px] text-slate-500">Selaraskan ke Google Calendar guru</div>
-                      </div>
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
+                {showDownloadMenu && (
+                  <>
+                    <div 
+                      className="fixed inset-0 z-40" 
+                      onClick={() => setShowDownloadMenu(false)} 
+                    />
+                    <div className="absolute right-0 mt-1.5 w-60 bg-white border border-slate-200 rounded-lg shadow-lg py-1.5 z-50 text-xs text-slate-700 animate-in fade-in zoom-in-95 duration-100">
+                      <button
+                        onClick={() => { setShowDownloadMenu(false); onPrint(); }}
+                        className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2"
+                      >
+                        <Printer className="w-4 h-4 text-slate-500" />
+                        <div>
+                          <div className="font-medium text-slate-800">Cetak / Simpan PDF (A4 Rasmi)</div>
+                          <div className="text-[11px] text-slate-500">Format surat siaran takwim KPM</div>
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => { setShowDownloadMenu(false); onExportExcel(); }}
+                        className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2 border-t border-slate-100"
+                      >
+                        <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                        <div>
+                          <div className="font-medium text-slate-800">Muat Turun Excel (.xlsx)</div>
+                          <div className="text-[11px] text-slate-500">Lengkap dengan grid dan tajuk KPM</div>
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => { setShowDownloadMenu(false); onExportCSV(); }}
+                        className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2 border-t border-slate-100"
+                      >
+                        <FileText className="w-4 h-4 text-blue-600" />
+                        <div>
+                          <div className="font-medium text-slate-800">Muat Turun CSV (Semua Data)</div>
+                          <div className="text-[11px] text-slate-500">Sesuai untuk pangkalan data</div>
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => { setShowDownloadMenu(false); onExportICal(); }}
+                        className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2 border-t border-slate-100"
+                      >
+                        <CalendarDays className="w-4 h-4 text-indigo-600" />
+                        <div>
+                          <div className="font-medium text-slate-800">Eksport iCalendar (.ics)</div>
+                          <div className="text-[11px] text-slate-500">Selaraskan ke Google Calendar guru</div>
+                        </div>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
           {/* ========================================================
               PENJURU SEBELAH KANAN:
-              1. Lencana Guru (Paparan Sahaja) - DIBESARKAN & JELAS
+              1. Lencana Guru (Paparan Sahaja)
               2. Butang Mod GPK / Keluar Edit
-              3. Butang Tetapan (Termasuk Integrasi Google Sheet)
+              3. Butang Tetapan (Hanya dalam Mod GPK)
              ======================================================== */}
           <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
-            {/* 1. Lencana Paparan Guru (DIBESARKAN & JELAS) */}
+            {/* 1. Lencana Paparan Guru */}
             <div 
               className={`px-3 py-1.5 rounded-lg border-2 flex items-center gap-2 text-xs sm:text-sm font-bold shadow-xs whitespace-nowrap ${roleInfo.bg}`}
               title="Status Mod Paparan Semasa"
@@ -292,7 +306,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             {isViewOnly ? (
               <button
                 onClick={onOpenLoginModal}
-                className="px-3.5 py-1.5 rounded-lg bg-[#0b6b5c] hover:bg-[#084f44] text-white text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-colors shadow-xs whitespace-nowrap"
+                className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-colors shadow-xs whitespace-nowrap"
                 title="Buka mod pengisian GPK & Pentadbir"
               >
                 <LogIn className="w-4 h-4" />
@@ -309,15 +323,17 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
 
-            {/* 3. Butang Tetapan (Mengandungi Tetapan Sekolah, Logo & Google Sheet) */}
-            <button
-              onClick={onOpenSettingsModal}
-              className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-800 text-xs sm:text-sm font-semibold flex items-center gap-1.5 transition-colors whitespace-nowrap shadow-xs"
-              title="Tetapan Sekolah, Logo TS25 & Integrasi Google Sheet"
-            >
-              <Settings className="w-4 h-4 text-slate-600" />
-              <span>Tetapan</span>
-            </button>
+            {/* 3. Butang Tetapan (Hanya dalam Mod GPK / Pentadbir) */}
+            {!isViewOnly && (
+              <button
+                onClick={onOpenSettingsModal}
+                className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-800 text-xs sm:text-sm font-semibold flex items-center gap-1.5 transition-colors whitespace-nowrap shadow-xs"
+                title="Tetapan Sekolah, Logo TS25 & Integrasi Google Sheet"
+              >
+                <Settings className="w-4 h-4 text-slate-600" />
+                <span>Tetapan</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
