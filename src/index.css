@@ -1,0 +1,38 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  }
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm;
+  }
+
+  body {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  /* Sembunyikan elemen paparan skrin ketika mencetak */
+  header,
+  nav,
+  main,
+  footer,
+  .no-print {
+    display: none !important;
+  }
+
+  /* Paparkan hanya kawasan cetakan rasmi */
+  #print-area {
+    display: block !important;
+  }
+
+  .page-break-after-always {
+    page-break-after: always;
+    break-after: page;
+  }
+}

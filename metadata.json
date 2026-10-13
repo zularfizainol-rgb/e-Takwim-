@@ -1,0 +1,6 @@
+{
+  "name": "e-Takwim Sekolah KPM",
+  "description": "Sistem Pengurusan & Pengisian Takwim Sekolah Bersepadu untuk GPK Pentadbiran, Kurikulum, HEM dan Kokurikulum dengan penyelarasan Google Sheet & Apps Script.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
