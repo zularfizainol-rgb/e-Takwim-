@@ -173,11 +173,14 @@ export default function App() {
         res.rows.forEach(r => {
           const normD = normalizeDateKey(r.d);
           if (rowMap[normD]) {
-            // Kekalkan program sekolah yang telah diisi oleh pentadbir/guru
-            if (r.p !== undefined && r.p !== '') rowMap[normD].p = r.p;
-            if (r.k !== undefined && r.k !== '') rowMap[normD].k = r.k;
-            if (r.h !== undefined && r.h !== '') rowMap[normD].h = r.h;
-            if (r.o !== undefined && r.o !== '') rowMap[normD].o = r.o;
+            const isActivelyDirty = Boolean(dirtyRowsRef.current[normD]);
+            // Hanya kemaskini jika pengguna tidak sedang aktif menaip pada baris tersebut
+            if (!isActivelyDirty) {
+              if (r.p !== undefined) rowMap[normD].p = r.p;
+              if (r.k !== undefined) rowMap[normD].k = r.k;
+              if (r.h !== undefined) rowMap[normD].h = r.h;
+              if (r.o !== undefined) rowMap[normD].o = r.o;
+            }
 
             // Jika ada catatan cuti khusus dari Google Sheet, beri keutamaan
             if (r.j) {
@@ -312,7 +315,8 @@ export default function App() {
         setSyncState('SYNCED');
         const now = new Date();
         const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-        setSyncMessage(`Sync Berjaya (${timeStr})`);
+        const cleanNote = res.duplicatesCleaned ? ' (Pertindihan Dicuci)' : '';
+        setSyncMessage(`Sync Berjaya${cleanNote} (${timeStr})`);
       } else {
         setSyncState('ERROR');
         setSyncMessage(res.error || 'Gagal menyegerak ke Google Sheet');
@@ -322,6 +326,43 @@ export default function App() {
       setSyncMessage('Ralat sync: ' + (err.message || 'Gagal'));
     }
   }, [settings.googleWebAppUrl, settings.kodEdit, settings.tahun]);
+
+  // Fungsi "Baiki & Buang Pertindihan Google Sheet" secara langsung daripada UI
+  const handleCleanDuplicates = useCallback(async () => {
+    if (!settings.googleWebAppUrl || settings.googleWebAppUrl.trim() === '') {
+      setSyncState('DIRTY');
+      setSyncMessage('Google Sheet belum disambung');
+      setGoogleSheetModalOpen(true);
+      return;
+    }
+
+    setSyncState('SAVING');
+    setSyncMessage('Membersihkan pertindihan...');
+
+    try {
+      const currentRows = rowsRef.current;
+      const currentSettings = settingsRef.current;
+
+      const res = await AppsScriptService.cleanDuplicates(
+        currentSettings.kodEdit || 'gpk2027',
+        currentSettings.googleWebAppUrl,
+        currentSettings.tahun,
+        Object.values(currentRows)
+      );
+
+      if (res.ok) {
+        setSyncState('SYNCED');
+        setSyncMessage(res.message);
+        await loadData(true);
+      } else {
+        setSyncState('ERROR');
+        setSyncMessage(res.message || 'Gagal membersihkan pertindihan');
+      }
+    } catch (err: any) {
+      setSyncState('ERROR');
+      setSyncMessage('Ralat pembersihan: ' + (err.message || 'Gagal'));
+    }
+  }, [settings.googleWebAppUrl, loadData]);
 
   const markRowDirty = useCallback((dateStr: string) => {
     dirtyRowsRef.current[dateStr] = true;
@@ -586,6 +627,7 @@ export default function App() {
           syncState={syncState}
           syncMessage={syncMessage}
           onSyncGoogleSheet={handleSyncGoogleSheet}
+          onCleanDuplicates={handleCleanDuplicates}
           onOpenAddModal={() => setAddModalOpen(true)}
           onOpenSettingsModal={() => setSettingsModalOpen(true)}
           onOpenLoginModal={() => setLoginModalOpen(true)}

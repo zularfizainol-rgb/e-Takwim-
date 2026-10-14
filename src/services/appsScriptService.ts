@@ -6,25 +6,26 @@ const STORAGE_KEY_SETTINGS = 'etakwim_settings_v2';
 export const APPS_SCRIPT_TEMPLATE = `/**
  * ============================================================================
  * e-Takwim Sekolah KPM - Google Apps Script (Code.gs)
- * Versi 3.0 (Anti-Pertindihan & Penyelarasan Pintar)
+ * Versi 4.0 (Anti-Pertindihan Mutlak & Auto-Susun Kronologi)
  * ============================================================================
- * Skrip ini bertindak sebagai API Backend untuk Google Sheet sekolah anda.
- * 
- * LANGKAH PEMASANGAN / KEMASKINI:
+ * Ciri-ciri Utama Versi 4.0:
+ * 1. PENGUNCIAN SERENTAK (LockService): Menghalang pertindihan apabila beberapa 
+ *    guru atau simpanan pantas berlaku pada saat yang sama.
+ * 2. KAWALAN ZON MASA TEPAT (Timezone-Safe): Membaca tarikh secara teks tulen (@)
+ *    bagi mengelakkan isu tanggal beranjak atau berganda dalam Google Sheets.
+ * 3. AUTO-DEDUP & AUTO-SORT: Setiap kali data disimpan, sebarang baris bertindih 
+ *    dalam Google Sheet akan dicantum dan disusun rapi 1 Jan - 31 Dis secara automatik.
+ *
+ * CARA MENGEMASKINI DI GOOGLE SHEETS:
  * 1. Buka Google Sheet takwim anda di Google Drive.
  * 2. Klik menu: Extensions (Sambungan) > Apps Script
- * 3. Padam SEMUA kod sedia ada dalam Code.gs dan TAMPAL kod di bawah sepenuhnya.
+ * 3. Padam SEMUA kod sedia ada dalam Code.gs dan TAMPAL kod Versi 4.0 ini sepenuhnya.
  * 4. Klik ikon 'Simpan' (Disket).
- * 5. Klik butang 'Deploy' (Guna) > 'New deployment' (Gunakan baharu)
- *    *PENTING*: Mesti 'New deployment' (bukan edit) agar kod versi baru diaktifkan.
- * 6. Pilih jenis: 'Web app' (Aplikasi Web)
- * 7. Konfigurasi:
- *    - Description: "API e-Takwim v3"
- *    - Execute as: "Me" (Saya)
- *    - Who has access: "Anyone" (Sesiapa sahaja)  <-- WAJIB
- * 8. Klik 'Deploy', berikan kebenaran (Authorize Access jika diminta),
- *    dan SALIN Web App URL yang berakhir dengan '/exec'.
- * 9. Tampal Web App URL tersebut ke dalam aplikasi e-Takwim Sekolah.
+ * 5. *PENTING - WAJIB*: Klik butang biru 'Deploy' (Guna) > 'Manage deployments' 
+ *    (Urus penggunaan), klik ikon Pensel (Edit), pilih Version: "New version" (Versi baharu),
+ *    dan klik 'Deploy'.
+ *    ATAU: Klik 'Deploy' > 'New deployment' > Web app > Execute as: Me > Who has access: Anyone.
+ * 6. Salin Web App URL (/exec) dan tampal ke dalam e-Takwim Sekolah.
  */
 
 // KATA LALUAN KESELAMATAN GPK & GURU BESAR (Lalai: gpk2027)
@@ -37,17 +38,24 @@ function getTakwimSheetName(year) {
 }
 
 /**
- * Normalisasikan tarikh kepada format piawai YYYY-MM-DD
- * Mengelakkan masalah objek Date Google Sheets menghasilkan timezone string
+ * Normalisasikan sebarang format tarikh kepada YYYY-MM-DD
+ * Kalis ralat objek Date, teks bebas, dan zon masa pelayan.
  */
-function normalizeDateStr(val) {
+function normalizeDateStr(val, optTz) {
   if (!val) return '';
+  var tz = optTz || SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone() || 'Asia/Kuala_Lumpur';
+  
   if (val instanceof Date) {
-    var year = val.getFullYear();
-    var month = ('0' + (val.getMonth() + 1)).slice(-2);
-    var day = ('0' + val.getDate()).slice(-2);
-    return year + '-' + month + '-' + day;
+    try {
+      return Utilities.formatDate(val, tz, 'yyyy-MM-dd');
+    } catch(e) {
+      var year = val.getFullYear();
+      var month = ('0' + (val.getMonth() + 1)).slice(-2);
+      var day = ('0' + val.getDate()).slice(-2);
+      return year + '-' + month + '-' + day;
+    }
   }
+  
   var str = String(val).trim();
   // Format YYYY-MM-DD atau YYYY/MM/DD
   var match = str.match(/^(\\d{4})[-/.](\\d{1,2})[-/.](\\d{1,2})/);
@@ -59,14 +67,30 @@ function normalizeDateStr(val) {
   if (dmyMatch) {
     return dmyMatch[3] + '-' + ('0' + dmyMatch[2]).slice(-2) + '-' + ('0' + dmyMatch[1]).slice(-2);
   }
+  
   var parsed = new Date(str);
   if (!isNaN(parsed.getTime()) && parsed.getFullYear() > 2000 && parsed.getFullYear() < 2100) {
-    var py = parsed.getFullYear();
-    var pm = ('0' + (parsed.getMonth() + 1)).slice(-2);
-    var pd = ('0' + parsed.getDate()).slice(-2);
-    return py + '-' + pm + '-' + pd;
+    try {
+      return Utilities.formatDate(parsed, tz, 'yyyy-MM-dd');
+    } catch(e) {
+      var py = parsed.getFullYear();
+      var pm = ('0' + (parsed.getMonth() + 1)).slice(-2);
+      var pd = ('0' + parsed.getDate()).slice(-2);
+      return py + '-' + pm + '-' + pd;
+    }
   }
   return str;
+}
+
+function mergeFieldText(a, b) {
+  var sA = String(a || '').trim();
+  var sB = String(b || '').trim();
+  if (!sA) return sB;
+  if (!sB) return sA;
+  if (sA === sB) return sA;
+  if (sA.indexOf(sB) !== -1) return sA;
+  if (sB.indexOf(sA) !== -1) return sB;
+  return sA + '\\n' + sB;
 }
 
 function doGet(e) {
@@ -82,7 +106,7 @@ function doGet(e) {
     var kod = (e && e.parameter && e.parameter.kod) || '';
     result = { status: kod === KOD_EDIT ? 'OK' : 'INVALID' };
   } else {
-    result = { status: 'OK', message: 'e-Takwim API v3 aktif' };
+    result = { status: 'OK', message: 'e-Takwim API v4 aktif' };
   }
   
   return ContentService.createTextOutput(JSON.stringify(result))
@@ -102,7 +126,7 @@ function doPost(e) {
   var year = data.year ? parseInt(data.year, 10) : 2027;
   var result = { ok: false };
   
-  // Pengesahan kod keselamatan jika ada tindakan kemaskini
+  // Pengesahan kod keselamatan GPK / Admin
   if (action !== 'checkKod' && kod !== KOD_EDIT) {
     return ContentService.createTextOutput(JSON.stringify({ ok: false, error: 'KOD_EDIT_SALAH' }))
       .setMimeType(ContentService.MimeType.JSON);
@@ -135,6 +159,7 @@ function getOrCreateSheet(name) {
 
 function getData(year) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var tz = ss.getSpreadsheetTimeZone() || 'Asia/Kuala_Lumpur';
   var sheetName = getTakwimSheetName(year);
   var sheet = getOrCreateSheet(sheetName);
   var lastRow = sheet.getLastRow();
@@ -143,12 +168,14 @@ function getData(year) {
   var seenMap = {};
   
   if (lastRow > 1) {
-    var data = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
-    for (var i = 0; i < data.length; i++) {
-      var r = data[i];
-      if (!r[0]) continue;
-      var dateKey = normalizeDateStr(r[0]);
-      if (!dateKey) continue;
+    var displayData = sheet.getRange(2, 1, lastRow - 1, 7).getDisplayValues();
+    var rawDates = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+
+    for (var i = 0; i < displayData.length; i++) {
+      var r = displayData[i];
+      var rawDate = rawDates[i][0];
+      var dateKey = normalizeDateStr(r[0], tz) || normalizeDateStr(rawDate, tz);
+      if (!dateKey || dateKey.length < 8) continue;
       
       var entry = {
         d: dateKey,
@@ -160,7 +187,6 @@ function getData(year) {
         o: String(r[6] || '').trim()
       };
 
-      // Jika lembaran sedia ada mempunyai baris bertindih lama, gabungkan tanpa membuang maklumat
       if (seenMap[dateKey] !== undefined) {
         var idx = seenMap[dateKey];
         var cur = rows[idx];
@@ -168,10 +194,10 @@ function getData(year) {
           d: dateKey,
           j: entry.j || cur.j,
           l: entry.l || cur.l,
-          p: entry.p ? (cur.p && cur.p.indexOf(entry.p) === -1 ? cur.p + '\\n' + entry.p : entry.p) : cur.p,
-          k: entry.k ? (cur.k && cur.k.indexOf(entry.k) === -1 ? cur.k + '\\n' + entry.k : entry.k) : cur.k,
-          h: entry.h ? (cur.h && cur.h.indexOf(entry.h) === -1 ? cur.h + '\\n' + entry.h : entry.h) : cur.h,
-          o: entry.o ? (cur.o && cur.o.indexOf(entry.o) === -1 ? cur.o + '\\n' + entry.o : entry.o) : cur.o
+          p: mergeFieldText(cur.p, entry.p),
+          k: mergeFieldText(cur.k, entry.k),
+          h: mergeFieldText(cur.h, entry.h),
+          o: mergeFieldText(cur.o, entry.o)
         };
       } else {
         seenMap[dateKey] = rows.length;
@@ -190,7 +216,7 @@ function getData(year) {
     }
   }
 
-  // Senaraikan semua tab takwim yang wujud dalam fail Google Sheet ini
+  // Senaraikan semua tab takwim sedia ada
   var sheets = ss.getSheets();
   var availableYears = [];
   for (var s = 0; s < sheets.length; s++) {
@@ -215,7 +241,232 @@ function getData(year) {
   };
 }
 
+/**
+ * Simpan baris takwim dengan perlindungan mutlak daripada pertindihan.
+ * Setiap tarikh hanya wujud 1 kali dan disusun rapi.
+ */
+function saveRows(entries, year) {
+  if (!entries || !entries.length) return { ok: true, count: 0 };
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var tz = ss.getSpreadsheetTimeZone() || 'Asia/Kuala_Lumpur';
+  var sheetName = getTakwimSheetName(year);
+  var sheet = getOrCreateSheet(sheetName);
+
+  // Kunci menggunakan LockService untuk keselamatan transaksi serentak
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(20000);
+  } catch(e) {
+    return { ok: false, error: 'Google Sheet sedang sibuk, sila cuba semula.' };
+  }
+
+  try {
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) {
+      var initRes = initSheet(entries, year);
+      lock.releaseLock();
+      return initRes;
+    }
+
+    var existingDisplay = sheet.getRange(2, 1, lastRow - 1, 7).getDisplayValues();
+    var existingRawDates = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+
+    var rowMap = {};
+    var dateList = [];
+    var duplicatesFound = false;
+
+    // 1. Kumpulkan semua data sedia ada mengikut tarikh unik
+    for (var i = 0; i < existingDisplay.length; i++) {
+      var rawD = existingDisplay[i][0];
+      var nDate = normalizeDateStr(rawD, tz) || normalizeDateStr(existingRawDates[i][0], tz);
+      if (!nDate || nDate.length < 8) continue;
+
+      if (!rowMap[nDate]) {
+        rowMap[nDate] = [
+          nDate,
+          existingDisplay[i][1] || '',
+          existingDisplay[i][2] || '',
+          existingDisplay[i][3] || '',
+          existingDisplay[i][4] || '',
+          existingDisplay[i][5] || '',
+          existingDisplay[i][6] || ''
+        ];
+        dateList.push(nDate);
+      } else {
+        // Pertindihan wujud dalam helaian sedia ada!
+        duplicatesFound = true;
+        for (var col = 1; col <= 6; col++) {
+          rowMap[nDate][col] = mergeFieldText(rowMap[nDate][col], existingDisplay[i][col]);
+        }
+      }
+    }
+
+    // 2. Kemaskini dengan data baharu yang dihantar dari aplikasi
+    for (var k = 0; k < entries.length; k++) {
+      var item = entries[k];
+      var itemDate = normalizeDateStr(item.d, tz);
+      if (!itemDate || itemDate.length < 8) continue;
+
+      var existingRow = rowMap[itemDate];
+      var updatedRow = [
+        itemDate,
+        item.j !== undefined ? String(item.j) : (existingRow ? existingRow[1] : ''),
+        item.l !== undefined ? String(item.l) : (existingRow ? existingRow[2] : ''),
+        item.p !== undefined ? String(item.p) : (existingRow ? existingRow[3] : ''),
+        item.k !== undefined ? String(item.k) : (existingRow ? existingRow[4] : ''),
+        item.h !== undefined ? String(item.h) : (existingRow ? existingRow[5] : ''),
+        item.o !== undefined ? String(item.o) : (existingRow ? existingRow[6] : '')
+      ];
+
+      if (!rowMap[itemDate]) {
+        dateList.push(itemDate);
+      }
+      rowMap[itemDate] = updatedRow;
+    }
+
+    // 3. Susun semua tarikh secara kronologi YYYY-MM-DD
+    dateList.sort();
+
+    var finalMatrix = [];
+    for (var m = 0; m < dateList.length; m++) {
+      finalMatrix.push(rowMap[dateList[m]]);
+    }
+
+    // 4. Jika ada pertindihan atau bilangan baris berubah, tulis semula lembaran bersih
+    if (duplicatesFound || finalMatrix.length !== (lastRow - 1)) {
+      sheet.clearContents();
+      var headers = [
+        'Tarikh (YYYY-MM-DD)', 
+        'Jenis Cuti (UMUM/PENGGAL/LAIN)', 
+        'Catatan Cuti', 
+        'Pentadbiran (PK1)', 
+        'Kurikulum', 
+        'Hal Ehwal Murid (HEM)', 
+        'Kokurikulum'
+      ];
+      sheet.getRange(1, 1, 1, 7).setValues([headers]);
+      sheet.getRange(1, 1, 1, 7)
+        .setBackground('#0b6b5c')
+        .setFontColor('#ffffff')
+        .setFontWeight('bold')
+        .setHorizontalAlignment('center');
+      sheet.setFrozenRows(1);
+
+      if (finalMatrix.length > 0) {
+        sheet.getRange(2, 1, finalMatrix.length, 1).setNumberFormat('@');
+        sheet.getRange(2, 1, finalMatrix.length, 7).setValues(finalMatrix);
+      }
+    } else {
+      // Tulis pantas satu matriks
+      sheet.getRange(2, 1, finalMatrix.length, 1).setNumberFormat('@');
+      sheet.getRange(2, 1, finalMatrix.length, 7).setValues(finalMatrix);
+    }
+
+    SpreadsheetApp.flush();
+    lock.releaseLock();
+    return { 
+      ok: true, 
+      updated: entries.length, 
+      totalUniqueRows: finalMatrix.length, 
+      duplicatesCleaned: duplicatesFound 
+    };
+  } catch(err) {
+    try { lock.releaseLock(); } catch(e) {}
+    return { ok: false, error: String(err) };
+  }
+}
+
+/**
+ * Bersihkan SEMUA pertindihan dalam Google Sheet dan susun dari 1 Jan ke 31 Dis
+ */
+function cleanDuplicates(year) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var tz = ss.getSpreadsheetTimeZone() || 'Asia/Kuala_Lumpur';
+  var sheetName = getTakwimSheetName(year);
+  var sheet = getOrCreateSheet(sheetName);
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return { ok: true, message: 'Lembaran kosong' };
+
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(20000); } catch(e) {}
+
+  try {
+    var existingDisplay = sheet.getRange(2, 1, lastRow - 1, 7).getDisplayValues();
+    var existingRawDates = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+
+    var uniqueMap = {};
+    var dateList = [];
+
+    for (var i = 0; i < existingDisplay.length; i++) {
+      var rawD = existingDisplay[i][0];
+      var dKey = normalizeDateStr(rawD, tz) || normalizeDateStr(existingRawDates[i][0], tz);
+      if (!dKey || dKey.length < 8) continue;
+
+      if (!uniqueMap[dKey]) {
+        uniqueMap[dKey] = [
+          dKey,
+          existingDisplay[i][1] || '',
+          existingDisplay[i][2] || '',
+          existingDisplay[i][3] || '',
+          existingDisplay[i][4] || '',
+          existingDisplay[i][5] || '',
+          existingDisplay[i][6] || ''
+        ];
+        dateList.push(dKey);
+      } else {
+        for (var col = 1; col <= 6; col++) {
+          uniqueMap[dKey][col] = mergeFieldText(uniqueMap[dKey][col], existingDisplay[i][col]);
+        }
+      }
+    }
+
+    dateList.sort();
+    var cleanedMatrix = dateList.map(function(k) { return uniqueMap[k]; });
+
+    sheet.clear();
+    var headers = [
+      'Tarikh (YYYY-MM-DD)', 
+      'Jenis Cuti (UMUM/PENGGAL/LAIN)', 
+      'Catatan Cuti', 
+      'Pentadbiran (PK1)', 
+      'Kurikulum', 
+      'Hal Ehwal Murid (HEM)', 
+      'Kokurikulum'
+    ];
+    sheet.appendRow(headers);
+    sheet.getRange(1, 1, 1, 7)
+      .setBackground('#0b6b5c')
+      .setFontColor('#ffffff')
+      .setFontWeight('bold')
+      .setHorizontalAlignment('center');
+    sheet.setFrozenRows(1);
+
+    if (cleanedMatrix.length > 0) {
+      sheet.getRange(2, 1, cleanedMatrix.length, 1).setNumberFormat('@');
+      sheet.getRange(2, 1, cleanedMatrix.length, 7).setValues(cleanedMatrix);
+    }
+    sheet.autoResizeColumns(1, 7);
+    SpreadsheetApp.flush();
+    lock.releaseLock();
+
+    return { 
+      ok: true, 
+      cleaned: cleanedMatrix.length, 
+      originalCount: lastRow - 1,
+      removed: (lastRow - 1) - cleanedMatrix.length
+    };
+  } catch(err) {
+    try { lock.releaseLock(); } catch(e) {}
+    return { ok: false, error: String(err) };
+  }
+}
+
+/**
+ * Inisialisasi semula seluruh lembaran 365 hari secara bersih & tersusun
+ */
 function initSheet(entries, year) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var tz = ss.getSpreadsheetTimeZone() || 'Asia/Kuala_Lumpur';
   var sheetName = getTakwimSheetName(year);
   var sheet = getOrCreateSheet(sheetName);
   sheet.clear();
@@ -231,8 +482,8 @@ function initSheet(entries, year) {
   ];
   
   sheet.appendRow(headers);
-  var headerRange = sheet.getRange(1, 1, 1, 7);
-  headerRange.setBackground('#0b6b5c')
+  sheet.getRange(1, 1, 1, 7)
+    .setBackground('#0b6b5c')
     .setFontColor('#ffffff')
     .setFontWeight('bold')
     .setHorizontalAlignment('center');
@@ -240,125 +491,45 @@ function initSheet(entries, year) {
   sheet.setFrozenRows(1);
   
   if (entries && entries.length) {
-    var batch = entries.map(function(r) {
-      return [normalizeDateStr(r.d), r.j || '', r.l || '', r.p || '', r.k || '', r.h || '', r.o || ''];
-    });
-    // Tetapkan lajur A format Plain Text (@)
+    // Susun secara kronologi dan buang sebarang duplikasi
+    var uniqueMap = {};
+    var dateList = [];
+    
+    for (var i = 0; i < entries.length; i++) {
+      var item = entries[i];
+      var dKey = normalizeDateStr(item.d, tz);
+      if (!dKey || dKey.length < 8) continue;
+      
+      if (!uniqueMap[dKey]) {
+        uniqueMap[dKey] = [
+          dKey, 
+          item.j || '', 
+          item.l || '', 
+          item.p || '', 
+          item.k || '', 
+          item.h || '', 
+          item.o || ''
+        ];
+        dateList.push(dKey);
+      } else {
+        uniqueMap[dKey][1] = item.j || uniqueMap[dKey][1];
+        uniqueMap[dKey][2] = item.l || uniqueMap[dKey][2];
+        uniqueMap[dKey][3] = mergeFieldText(uniqueMap[dKey][3], item.p);
+        uniqueMap[dKey][4] = mergeFieldText(uniqueMap[dKey][4], item.k);
+        uniqueMap[dKey][5] = mergeFieldText(uniqueMap[dKey][5], item.h);
+        uniqueMap[dKey][6] = mergeFieldText(uniqueMap[dKey][6], item.o);
+      }
+    }
+    
+    dateList.sort();
+    var batch = dateList.map(function(k) { return uniqueMap[k]; });
+    
     sheet.getRange(2, 1, batch.length, 1).setNumberFormat('@');
     sheet.getRange(2, 1, batch.length, 7).setValues(batch);
   }
   
   sheet.autoResizeColumns(1, 7);
   return { ok: true, count: entries ? entries.length : 0 };
-}
-
-function saveRows(entries, year) {
-  if (!entries || !entries.length) return { ok: true, count: 0 };
-  var sheetName = getTakwimSheetName(year);
-  var sheet = getOrCreateSheet(sheetName);
-  var lastRow = sheet.getLastRow();
-  
-  if (lastRow <= 1) {
-    return initSheet(entries, year);
-  }
-  
-  // Baca semua tarikh sedia ada dengan normalisasi tarikh yang tepat
-  var dateCol = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
-  var dateIndexMap = {};
-  for (var i = 0; i < dateCol.length; i++) {
-    var rawDate = dateCol[i][0];
-    if (rawDate) {
-      var dKey = normalizeDateStr(rawDate);
-      if (dKey && !dateIndexMap[dKey]) {
-        dateIndexMap[dKey] = i + 2;
-      }
-    }
-  }
-  
-  for (var k = 0; k < entries.length; k++) {
-    var item = entries[k];
-    var normDate = normalizeDateStr(item.d);
-    if (!normDate) continue;
-    
-    var rowIndex = dateIndexMap[normDate];
-    var rowValues = [normDate, item.j || '', item.l || '', item.p || '', item.k || '', item.h || '', item.o || ''];
-    
-    if (rowIndex) {
-      // KEMASKINI BARIS SEDIA ADA (Mengelakkan pertindihan data!)
-      sheet.getRange(rowIndex, 1, 1, 7).setValues([rowValues]);
-    } else {
-      // HANYA tambah baris jika tarikh belum wujud
-      sheet.appendRow(rowValues);
-      var newLastRow = sheet.getLastRow();
-      sheet.getRange(newLastRow, 1).setNumberFormat('@');
-      dateIndexMap[normDate] = newLastRow;
-    }
-  }
-  
-  return { ok: true, updated: entries.length };
-}
-
-/**
- * Pembersihan Pintar: Buang baris bertindih dalam Google Sheet
- */
-function cleanDuplicates(year) {
-  var sheetName = getTakwimSheetName(year);
-  var sheet = getOrCreateSheet(sheetName);
-  var lastRow = sheet.getLastRow();
-  if (lastRow <= 1) return { ok: true, message: 'Lembaran kosong' };
-
-  var data = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
-  var uniqueMap = {};
-  var order = [];
-
-  for (var i = 0; i < data.length; i++) {
-    var r = data[i];
-    if (!r[0]) continue;
-    var dKey = normalizeDateStr(r[0]);
-    if (!dKey) continue;
-
-    if (!uniqueMap[dKey]) {
-      uniqueMap[dKey] = [dKey, r[1] || '', r[2] || '', r[3] || '', r[4] || '', r[5] || '', r[6] || ''];
-      order.push(dKey);
-    } else {
-      for (var col = 1; col < 7; col++) {
-        var existingVal = String(uniqueMap[dKey][col] || '').trim();
-        var incomingVal = String(r[col] || '').trim();
-        if (!existingVal && incomingVal) {
-          uniqueMap[dKey][col] = incomingVal;
-        } else if (incomingVal && existingVal && existingVal.indexOf(incomingVal) === -1) {
-          uniqueMap[dKey][col] = existingVal + '\\n' + incomingVal;
-        }
-      }
-    }
-  }
-
-  sheet.clear();
-  var headers = [
-    'Tarikh (YYYY-MM-DD)', 
-    'Jenis Cuti (UMUM/PENGGAL/LAIN)', 
-    'Catatan Cuti', 
-    'Pentadbiran (PK1)', 
-    'Kurikulum', 
-    'Hal Ehwal Murid (HEM)', 
-    'Kokurikulum'
-  ];
-  sheet.appendRow(headers);
-  sheet.getRange(1, 1, 1, 7)
-    .setBackground('#0b6b5c')
-    .setFontColor('#ffffff')
-    .setFontWeight('bold')
-    .setHorizontalAlignment('center');
-  sheet.setFrozenRows(1);
-
-  order.sort();
-  var cleanedRows = order.map(function(k) { return uniqueMap[k]; });
-  if (cleanedRows.length > 0) {
-    sheet.getRange(2, 1, cleanedRows.length, 1).setNumberFormat('@');
-    sheet.getRange(2, 1, cleanedRows.length, 7).setValues(cleanedRows);
-  }
-  sheet.autoResizeColumns(1, 7);
-  return { ok: true, cleaned: cleanedRows.length, originalCount: lastRow - 1 };
 }
 
 function saveSettings(settings) {
@@ -439,7 +610,7 @@ export class AppsScriptService {
     kod: string,
     webAppUrl?: string,
     year: number = 2027
-  ): Promise<{ ok: boolean; source: 'cloud' | 'local'; error?: string }> {
+  ): Promise<{ ok: boolean; source: 'cloud' | 'local'; error?: string; duplicatesCleaned?: boolean }> {
     // Simpan ke storan tempatan mengikut tahun untuk jaminan keselamatan data
     this.updateLocalRows(entries, year);
 
@@ -463,7 +634,7 @@ export class AppsScriptService {
           if (result && result.error === 'KOD_EDIT_SALAH') {
             return { ok: false, source: 'cloud', error: 'Kod keselamatan salah.' };
           }
-          return { ok: true, source: 'cloud' };
+          return { ok: true, source: 'cloud', duplicatesCleaned: Boolean(result && result.duplicatesCleaned) };
         }
       } catch (err: any) {
         console.warn('Ralat menyimpan ke Google Apps Script:', err);
@@ -529,40 +700,17 @@ export class AppsScriptService {
   }
 
   /**
-   * Ambil data tempatan daripada localStorage mengikut tahun
-   */
-  static getLocalRows(year: number = 2027): TakwimRow[] | undefined {
-    try {
-      const storageKey = this.getStorageKeyRows(year);
-      let raw = localStorage.getItem(storageKey);
-      if (!raw && year === 2027) {
-        raw = localStorage.getItem(STORAGE_KEY_ROWS);
-      }
-      return raw ? JSON.parse(raw) : undefined;
-    } catch {
-      return undefined;
-    }
-  }
-
-  static getLocalSettings(): Partial<SchoolSettings> {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY_SETTINGS);
-      return raw ? JSON.parse(raw) : {};
-    } catch {
-      return {};
-    }
-  }
-
-  /**
-   * Bersihkan pertindihan baris dalam helaian Google Sheet
+   * Bersihkan pertindihan baris dalam helaian Google Sheet secara automatik.
+   * Dilengkapi fallback bijak menggunakan initSheet sekiranya skrip pengguna belum dinaik taraf ke v4.
    */
   static async cleanDuplicates(
     kod: string,
     webAppUrl?: string,
-    year: number = 2027
+    year: number = 2027,
+    fallbackRows?: TakwimRow[]
   ): Promise<{ ok: boolean; message: string }> {
     if (!webAppUrl || !webAppUrl.trim().startsWith('http')) {
-      return { ok: false, message: 'URL Google Apps Script tidak sah.' };
+      return { ok: false, message: 'URL Google Apps Script tidak sah. Sila sambungkan Google Sheet terlebih dahulu.' };
     }
 
     try {
@@ -578,19 +726,46 @@ export class AppsScriptService {
 
       if (res.ok) {
         const data = await res.json();
-        if (data.ok) {
+        if (data && data.ok) {
+          const removedNote = data.removed !== undefined && data.removed > 0 
+            ? ` (${data.removed} baris pertindihan berjaya dibuang!)` 
+            : ' (Tiada pertindihan dikesan, data disusun rapi)';
           return {
             ok: true,
-            message: `Pembersihan berjaya! Sebanyak ${data.cleaned || 0} tarikh unik dikemaskini tanpa pertindihan (daripada ${data.originalCount || 0} baris sebelumnya).`
+            message: `Pembersihan berjaya! Sebanyak ${data.cleaned || 0} tarikh disusun secara kronologi${removedNote}.`
           };
-        } else {
-          return { ok: false, message: data.error || 'Gagal membersihkan lembaran.' };
         }
       }
-      return { ok: false, message: `Ralat respons pelayan (${res.status})` };
     } catch (err: any) {
-      return { ok: false, message: 'Ralat sambungan: ' + (err.message || 'CORS / Ralat Rangkaian') };
+      console.warn('Endpoint cleanDuplicates gagal, mencuba fallback initSheet:', err);
     }
+
+    // FALLBACK PINTAR: Jika skrip di Apps Script adalah versi lama yang belum ada endpoint cleanDuplicates,
+    // kita susun dan buang pertindihan secara klien dan inisialisasi semula lembaran melalui initSheet!
+    if (fallbackRows && fallbackRows.length > 0) {
+      try {
+        const uniqueMap: Record<string, TakwimRow> = {};
+        fallbackRows.forEach(r => {
+          const dKey = normalizeDateKey(r.d);
+          if (dKey) {
+            uniqueMap[dKey] = r;
+          }
+        });
+        const cleanSorted = Object.values(uniqueMap).sort((a, b) => a.d.localeCompare(b.d));
+
+        const initRes = await this.initSheet(cleanSorted, kod, webAppUrl, year);
+        if (initRes.ok) {
+          return {
+            ok: true,
+            message: `Pertindihan berjaya dibersihkan! Sebanyak ${cleanSorted.length} baris takwim telah disusun semula tanpa pertindihan ke Google Sheet.`
+          };
+        }
+      } catch (fallbackErr: any) {
+        return { ok: false, message: 'Gagal membersihkan lembaran: ' + (fallbackErr.message || 'Ralat') };
+      }
+    }
+
+    return { ok: false, message: 'Gagal menghubungi Google Sheet. Sila pastikan Web App URL betul dan aktif.' };
   }
 
   /**
@@ -632,12 +807,43 @@ export class AppsScriptService {
     }
   }
 
+  /**
+   * Ambil data tempatan daripada localStorage mengikut tahun
+   */
+  static getLocalRows(year: number = 2027): TakwimRow[] | undefined {
+    try {
+      const storageKey = this.getStorageKeyRows(year);
+      let raw = localStorage.getItem(storageKey);
+      if (!raw && year === 2027) {
+        raw = localStorage.getItem(STORAGE_KEY_ROWS);
+      }
+      return raw ? JSON.parse(raw) : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  static getLocalSettings(): Partial<SchoolSettings> {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_SETTINGS);
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  }
+
   static updateLocalRows(updatedEntries: TakwimRow[], year: number = 2027): void {
     try {
       const current = this.getLocalRows(year) || [];
       const map: Record<string, TakwimRow> = {};
-      current.forEach(r => { map[r.d] = r; });
-      updatedEntries.forEach(r => { map[r.d] = r; });
+      current.forEach(r => { 
+        const normD = normalizeDateKey(r.d);
+        if (normD) map[normD] = { ...r, d: normD }; 
+      });
+      updatedEntries.forEach(r => { 
+        const normD = normalizeDateKey(r.d);
+        if (normD) map[normD] = { ...r, d: normD }; 
+      });
       const storageKey = this.getStorageKeyRows(year);
       localStorage.setItem(storageKey, JSON.stringify(Object.values(map)));
     } catch (e) {
@@ -658,11 +864,11 @@ export function normalizeDateKey(val: any): string {
     return `${y}-${m}-${d}`;
   }
   const str = String(val).trim();
-  const match = str.match(/^(\\d{4})[-/.](\\d{1,2})[-/.](\\d{1,2})/);
+  const match = str.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
   if (match) {
     return `${match[1]}-${String(match[2]).padStart(2, '0')}-${String(match[3]).padStart(2, '0')}`;
   }
-  const dmyMatch = str.match(/^(\\d{1,2})[-/.](\\d{1,2})[-/.](\\d{4})/);
+  const dmyMatch = str.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
   if (dmyMatch) {
     return `${dmyMatch[3]}-${String(dmyMatch[2]).padStart(2, '0')}-${String(dmyMatch[1]).padStart(2, '0')}`;
   }

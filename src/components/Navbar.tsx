@@ -15,7 +15,8 @@ import {
   Settings, 
   ShieldCheck, 
   CalendarDays,
-  Share2
+  Share2,
+  Sparkles
 } from 'lucide-react';
 import { SchoolSettings, SyncState, UserRole } from '../types/takwim';
 import { SchoolLogoDisplay } from '../data/defaultLogos';
@@ -26,6 +27,7 @@ interface NavbarProps {
   syncState: SyncState;
   syncMessage: string;
   onSyncGoogleSheet: () => void;
+  onCleanDuplicates?: () => void;
   onOpenAddModal: () => void;
   onOpenSettingsModal: () => void;
   onOpenLoginModal: () => void;
@@ -44,6 +46,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   syncState,
   syncMessage,
   onSyncGoogleSheet,
+  onCleanDuplicates,
   onOpenAddModal,
   onOpenSettingsModal,
   onOpenLoginModal,
@@ -188,8 +191,20 @@ export const Navbar: React.FC<NavbarProps> = ({
                   title="Hantar dan segerakkan semua data semasa ke Google Sheet (Alternatif manual jika data belum update)"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 text-teal-700 ${syncState === 'SAVING' ? 'animate-spin' : ''}`} />
-                  <span className="hidden sm:inline">Sync Google Sheet</span>
+                  <span className="hidden sm:inline">Sync Sheet</span>
                 </button>
+
+                {onCleanDuplicates && (
+                  <button
+                    onClick={onCleanDuplicates}
+                    disabled={syncState === 'SAVING'}
+                    className="px-2.5 py-1.5 rounded-md border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-2xs disabled:opacity-50"
+                    title="Baiki & buang baris tarikh bertindih dalam Google Sheet secara automatik"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-amber-700" />
+                    <span className="hidden md:inline">Baiki Pertindihan</span>
+                  </button>
+                )}
 
                 <button
                   onClick={onOpenAddModal}

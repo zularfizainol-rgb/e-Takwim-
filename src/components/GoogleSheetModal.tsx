@@ -11,7 +11,8 @@ import {
   Code, 
   ShieldCheck,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Sparkles
 } from 'lucide-react';
 import { APPS_SCRIPT_TEMPLATE, AppsScriptService } from '../services/appsScriptService';
 import { SchoolSettings, TakwimRow } from '../types/takwim';
@@ -65,7 +66,8 @@ export const GoogleSheetModal: React.FC<GoogleSheetModalProps> = ({
     const result = await AppsScriptService.cleanDuplicates(
       settings.kodEdit || 'gpk2027',
       urlInput,
-      settings.tahun
+      settings.tahun,
+      Object.values(rows)
     );
     setTestResult(result);
     setIsCleaning(false);
@@ -143,7 +145,7 @@ export const GoogleSheetModal: React.FC<GoogleSheetModalProps> = ({
             }`}
           >
             <Code className="w-3.5 h-3.5" />
-            <span>2. Kod Sumber Apps Script (Code.gs v3)</span>
+            <span>2. Kod Sumber Apps Script (Code.gs v4.0)</span>
           </button>
         </div>
 
@@ -152,16 +154,31 @@ export const GoogleSheetModal: React.FC<GoogleSheetModalProps> = ({
           {activeTab === 'setup' ? (
             <>
               {/* Notis Penting untuk Masalah Pertindihan & Kemaskini */}
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 space-y-1">
-                <div className="font-bold flex items-center gap-1.5 text-xs text-amber-800">
+              <div className="p-3.5 bg-amber-50/90 border-2 border-amber-300 rounded-lg text-amber-900 space-y-2">
+                <div className="font-bold flex items-center gap-1.5 text-xs text-amber-900">
                   <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>Penyelesaian Masalah Pertindihan Data & Isu Kemaskini:</span>
+                  <span>PUNCA PERTINDIHAN TARIKH & CARA SELESAIKAN (1 MINIT):</span>
                 </div>
-                <p className="text-[11px] leading-relaxed text-amber-800">
-                  Pertindihan baris berlaku sekiranya Google Sheet anda masih menggunakan skrip versi lama. 
-                  Sila salin kod <strong>Code.gs Versi 3.0</strong> di tab sebelah, gantikan dalam Apps Script sekolah, 
-                  dan buat <strong>New Deployment</strong> (Who has access: Anyone).
-                </p>
+                <div className="text-[11px] leading-relaxed text-amber-900 space-y-1.5">
+                  <p>
+                    Sekiranya tarikh masih bertindih dalam Google Sheet anda, ini disebabkan oleh dua perkara:
+                  </p>
+                  <ul className="list-disc list-inside pl-1 space-y-0.5 text-amber-800">
+                    <li>Google Sheet anda masih menyimpan baris pendua daripada simpanan versi terdahulu.</li>
+                    <li>Apps Script sekolah anda masih menjalankan kod versi lama di latar belakang.</li>
+                  </ul>
+                  <div className="p-2.5 bg-white/90 rounded border border-amber-200 mt-1 space-y-1">
+                    <p className="font-bold text-amber-900">
+                      Tindakan Pantas:
+                    </p>
+                    <p className="text-slate-700">
+                      1. Klik butang oren <strong>"Bersihkan Pertindihan Sekarang"</strong> di bawah untuk membuang semua tarikh berganda serta-merta.
+                    </p>
+                    <p className="text-slate-700">
+                      2. Salin kod <strong>Code.gs Versi 4.0</strong> di tab sebelah, tampal di Apps Script, dan WAJIB klik <strong>Deploy &gt; Manage deployments &gt; Edit &gt; New version &gt; Deploy</strong>!
+                    </p>
+                  </div>
+                </div>
               </div>
 
               {/* Input URL Web App */}
@@ -221,21 +238,21 @@ export const GoogleSheetModal: React.FC<GoogleSheetModalProps> = ({
                         type="button"
                         onClick={handleCleanDuplicates}
                         disabled={isCleaning}
-                        className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 disabled:bg-slate-300 text-white rounded text-[11px] font-medium flex items-center gap-1"
+                        className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:bg-slate-300 text-white rounded text-[11px] font-bold flex items-center gap-1.5 shadow-xs transition-colors"
                         title="Buang baris-baris bertindih dan kekalkan satu baris unik per tarikh"
                       >
-                        {isCleaning && <RefreshCw className="w-3 h-3 animate-spin" />}
-                        <span>Bersihkan Pertindihan</span>
+                        {isCleaning ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                        <span>Bersihkan Pertindihan Sekarang</span>
                       </button>
                       <button
                         type="button"
                         onClick={handleUploadAll}
                         disabled={isUploading}
-                        className="px-2.5 py-1 bg-[#0b6b5c] hover:bg-[#084f44] disabled:bg-slate-300 text-white rounded text-[11px] font-medium flex items-center gap-1"
+                        className="px-2.5 py-1.5 bg-[#0b6b5c] hover:bg-[#084f44] disabled:bg-slate-300 text-white rounded text-[11px] font-medium flex items-center gap-1 transition-colors"
                         title="Muat naik semula 365 hari secara bersih dan teratur ke Google Sheet"
                       >
                         {isUploading && <RefreshCw className="w-3 h-3 animate-spin" />}
-                        <span>Muat Naik Semua Data Penuh</span>
+                        <span>Muat Naik Penuh (365 Hari Bersih)</span>
                       </button>
                     </div>
                   )}
