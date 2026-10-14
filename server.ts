@@ -117,6 +117,8 @@ app.post('/api/settings', (req, res) => {
     if (settings) {
       const existingSettings = db.settings || {};
       const cleanSettings = { ...settings };
+
+      // Jangan benarkan maklumat kosong atau default lapuk menimpa tetapan sekolah yang telah diisi
       if (!cleanSettings.logoSekolah && existingSettings.logoSekolah) {
         cleanSettings.logoSekolah = existingSettings.logoSekolah;
       }
@@ -129,6 +131,22 @@ app.post('/api/settings', (req, res) => {
       if ((!cleanSettings.kodSekolah || cleanSettings.kodSekolah === 'WBA0001') && existingSettings.kodSekolah) {
         cleanSettings.kodSekolah = existingSettings.kodSekolah;
       }
+      if (!cleanSettings.guruBesar && existingSettings.guruBesar) {
+        cleanSettings.guruBesar = existingSettings.guruBesar;
+      }
+      if (!cleanSettings.gpkPentadbiran && existingSettings.gpkPentadbiran) {
+        cleanSettings.gpkPentadbiran = existingSettings.gpkPentadbiran;
+      }
+      if (!cleanSettings.gpkKurikulum && existingSettings.gpkKurikulum) {
+        cleanSettings.gpkKurikulum = existingSettings.gpkKurikulum;
+      }
+      if (!cleanSettings.gpkHem && existingSettings.gpkHem) {
+        cleanSettings.gpkHem = existingSettings.gpkHem;
+      }
+      if (!cleanSettings.gpkKoko && existingSettings.gpkKoko) {
+        cleanSettings.gpkKoko = existingSettings.gpkKoko;
+      }
+
       db.settings = { ...existingSettings, ...cleanSettings };
       db.updatedAt = new Date().toISOString();
       writeDB(db);
@@ -147,7 +165,12 @@ async function startServer() {
 
   if (!isProd) {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { 
+        middlewareMode: true,
+        watch: {
+          ignored: ['**/data/**', '**/takwim_db.json']
+        }
+      },
       appType: 'spa'
     });
     app.use(vite.middlewares);

@@ -138,17 +138,22 @@ export default function App() {
       const res = await AppsScriptService.loadData(settings.googleWebAppUrl, activeYear);
       if (res.settings) {
         setSettings(prev => {
-          const merged = { ...prev, ...res.settings, tahun: activeYear };
-          if (!merged.sekolah || merged.sekolah === 'SK Seri Bintang Selatan' || merged.sekolah === 'SEKOLAH KEBANGSAAN SERI BINTANG') {
-            merged.sekolah = prev.sekolah || DEFAULT_SETTINGS.sekolah;
-          }
-          if (!merged.logoSekolah && prev.logoSekolah) {
-            merged.logoSekolah = prev.logoSekolah;
-          }
-          if (!merged.logoTs25 && prev.logoTs25) {
-            merged.logoTs25 = prev.logoTs25;
-          }
-          return merged;
+          const s = res.settings!;
+          return {
+            ...prev,
+            ...s,
+            tahun: activeYear,
+            sekolah: (s.sekolah && s.sekolah !== 'SK Seri Bintang Selatan' && s.sekolah !== 'SEKOLAH KEBANGSAAN SERI BINTANG') ? s.sekolah : (prev.sekolah || DEFAULT_SETTINGS.sekolah),
+            kodSekolah: (s.kodSekolah && s.kodSekolah !== 'WBA0001') ? s.kodSekolah : (prev.kodSekolah || DEFAULT_SETTINGS.kodSekolah),
+            guruBesar: s.guruBesar || prev.guruBesar || DEFAULT_SETTINGS.guruBesar,
+            gpkPentadbiran: s.gpkPentadbiran || prev.gpkPentadbiran || DEFAULT_SETTINGS.gpkPentadbiran,
+            gpkKurikulum: s.gpkKurikulum || prev.gpkKurikulum || DEFAULT_SETTINGS.gpkKurikulum,
+            gpkHem: s.gpkHem || prev.gpkHem || DEFAULT_SETTINGS.gpkHem,
+            gpkKoko: s.gpkKoko || prev.gpkKoko || DEFAULT_SETTINGS.gpkKoko,
+            logoSekolah: s.logoSekolah || prev.logoSekolah,
+            logoTs25: s.logoTs25 || prev.logoTs25,
+            paparLogoTs25: s.paparLogoTs25 !== undefined ? s.paparLogoTs25 : prev.paparLogoTs25
+          };
         });
       }
 
@@ -257,14 +262,20 @@ export default function App() {
         if (sRes.ok) {
           const sJson = await sRes.json();
           if (sJson && sJson.settings) {
-            activeYear = sJson.settings.tahun || activeYear;
+            const s = sJson.settings;
+            activeYear = s.tahun || activeYear;
             setSettings(prev => ({
               ...prev,
-              ...sJson.settings,
-              sekolah: sJson.settings.sekolah || prev.sekolah || DEFAULT_SETTINGS.sekolah,
-              kodSekolah: sJson.settings.kodSekolah || prev.kodSekolah || DEFAULT_SETTINGS.kodSekolah,
-              logoSekolah: sJson.settings.logoSekolah || prev.logoSekolah,
-              logoTs25: sJson.settings.logoTs25 || prev.logoTs25
+              ...s,
+              sekolah: (s.sekolah && s.sekolah !== 'SK Seri Bintang Selatan' && s.sekolah !== 'SEKOLAH KEBANGSAAN SERI BINTANG') ? s.sekolah : (prev.sekolah || DEFAULT_SETTINGS.sekolah),
+              kodSekolah: (s.kodSekolah && s.kodSekolah !== 'WBA0001') ? s.kodSekolah : (prev.kodSekolah || DEFAULT_SETTINGS.kodSekolah),
+              guruBesar: s.guruBesar || prev.guruBesar || DEFAULT_SETTINGS.guruBesar,
+              gpkPentadbiran: s.gpkPentadbiran || prev.gpkPentadbiran || DEFAULT_SETTINGS.gpkPentadbiran,
+              gpkKurikulum: s.gpkKurikulum || prev.gpkKurikulum || DEFAULT_SETTINGS.gpkKurikulum,
+              gpkHem: s.gpkHem || prev.gpkHem || DEFAULT_SETTINGS.gpkHem,
+              gpkKoko: s.gpkKoko || prev.gpkKoko || DEFAULT_SETTINGS.gpkKoko,
+              logoSekolah: s.logoSekolah || prev.logoSekolah,
+              logoTs25: s.logoTs25 || prev.logoTs25
             }));
             await loadData(false, activeYear);
             return;

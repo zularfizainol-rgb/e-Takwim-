@@ -682,6 +682,21 @@ export class AppsScriptService {
             if (serverData.settings?.logoTs25) {
               mergedSettings.logoTs25 = serverData.settings.logoTs25;
             }
+            if (serverData.settings?.guruBesar) {
+              mergedSettings.guruBesar = serverData.settings.guruBesar;
+            }
+            if (serverData.settings?.gpkPentadbiran) {
+              mergedSettings.gpkPentadbiran = serverData.settings.gpkPentadbiran;
+            }
+            if (serverData.settings?.gpkKurikulum) {
+              mergedSettings.gpkKurikulum = serverData.settings.gpkKurikulum;
+            }
+            if (serverData.settings?.gpkHem) {
+              mergedSettings.gpkHem = serverData.settings.gpkHem;
+            }
+            if (serverData.settings?.gpkKoko) {
+              mergedSettings.gpkKoko = serverData.settings.gpkKoko;
+            }
             try {
               localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(mergedSettings));
             } catch (storageErr) {

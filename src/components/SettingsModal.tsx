@@ -47,6 +47,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [activeTab, setActiveTab] = useState<'general' | 'sheet' | 'security'>('general');
   const [formData, setFormData] = useState<SchoolSettings>({ ...settings });
   const [resetConfirm, setResetConfirm] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   // Keadaan Google Sheet
   const [testingSheet, setTestingSheet] = useState(false);
@@ -69,8 +70,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   }, [isOpen, settings]);
 
   if (!isOpen) return null;
-
-  const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
