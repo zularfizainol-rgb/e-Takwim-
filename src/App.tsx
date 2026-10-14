@@ -234,7 +234,25 @@ export default function App() {
         // Abaikan
       }
     }
-    loadData();
+
+    const initSettingsAndLoad = async () => {
+      try {
+        const sRes = await fetch(`/api/settings?_t=${Date.now()}`);
+        if (sRes.ok) {
+          const sJson = await sRes.json();
+          if (sJson && sJson.settings) {
+            setSettings(prev => ({ ...prev, ...sJson.settings }));
+            loadData(false, sJson.settings.tahun);
+            return;
+          }
+        }
+      } catch (e) {
+        // Abaikan
+      }
+      loadData();
+    };
+
+    initSettingsAndLoad();
   }, []);
 
   // Penyelarasan Latar Belakang Automatik (Background Polling serentak untuk semua GPK)

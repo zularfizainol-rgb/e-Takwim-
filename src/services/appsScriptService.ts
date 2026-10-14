@@ -540,7 +540,12 @@ function saveSettings(settings) {
   
   var keys = Object.keys(settings || {});
   for (var i = 0; i < keys.length; i++) {
-    sheet.appendRow([keys[i], settings[keys[i]]]);
+    var k = keys[i];
+    var val = settings[k];
+    if (typeof val === 'string' && val.length > 45000) {
+      continue;
+    }
+    sheet.appendRow([k, val]);
   }
   return { ok: true };
 }
@@ -575,13 +580,58 @@ export class AppsScriptService {
             // Simpan ke cache tempatan mengikut tahun
             const storageKey = this.getStorageKeyRows(year);
             localStorage.setItem(storageKey, JSON.stringify(json.rows));
-            if (json.settings) {
-              const cachedSettings = this.getLocalSettings();
-              localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify({ ...cachedSettings, ...json.settings }));
+            // Dapatkan tetapan pusat daripada pelayan (/api/settings) untuk logo & metadata sekolah
+            let centralSettings: Partial<SchoolSettings> = {};
+            try {
+              const sRes = await fetch(`/api/settings?_t=${Date.now()}`);
+              if (sRes.ok) {
+                const sJson = await sRes.json();
+                if (sJson && sJson.settings) {
+                  centralSettings = sJson.settings;
+                }
+              }
+            } catch (e) {}
+
+            const cachedSettings = this.getLocalSettings();
+            const mergedSettings: Partial<SchoolSettings> = {
+              ...cachedSettings,
+              ...centralSettings,
+              ...(json.settings || {})
+            };
+
+            // Pastikan maklumat utama sekolah (nama, kod, logo) tidak hilang jika helaian Google Sheet tiada menyimpannya
+            if (centralSettings.sekolah && (!mergedSettings.sekolah || mergedSettings.sekolah === 'SEKOLAH KEBANGSAAN SERI BINTANG')) {
+              mergedSettings.sekolah = centralSettings.sekolah;
             }
+            if (centralSettings.kodSekolah && (!mergedSettings.kodSekolah || mergedSettings.kodSekolah === 'WBA0001')) {
+              mergedSettings.kodSekolah = centralSettings.kodSekolah;
+            }
+            if (centralSettings.logoSekolah && !mergedSettings.logoSekolah) {
+              mergedSettings.logoSekolah = centralSettings.logoSekolah;
+            }
+            if (centralSettings.logoTs25 && !mergedSettings.logoTs25) {
+              mergedSettings.logoTs25 = centralSettings.logoTs25;
+            }
+            if (centralSettings.guruBesar && !mergedSettings.guruBesar) {
+              mergedSettings.guruBesar = centralSettings.guruBesar;
+            }
+            if (centralSettings.gpkPentadbiran && !mergedSettings.gpkPentadbiran) {
+              mergedSettings.gpkPentadbiran = centralSettings.gpkPentadbiran;
+            }
+            if (centralSettings.gpkKurikulum && !mergedSettings.gpkKurikulum) {
+              mergedSettings.gpkKurikulum = centralSettings.gpkKurikulum;
+            }
+            if (centralSettings.gpkHem && !mergedSettings.gpkHem) {
+              mergedSettings.gpkHem = centralSettings.gpkHem;
+            }
+            if (centralSettings.gpkKoko && !mergedSettings.gpkKoko) {
+              mergedSettings.gpkKoko = centralSettings.gpkKoko;
+            }
+
+            localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(mergedSettings));
             return {
               rows: json.rows,
-              settings: json.settings,
+              settings: mergedSettings,
               availableYears: json.availableYears,
               source: 'cloud'
             };
@@ -716,13 +766,21 @@ export class AppsScriptService {
 
     if (webAppUrl && webAppUrl.trim().startsWith('http')) {
       try {
+        const sheetSettings: any = { ...settings };
+        if (typeof sheetSettings.logoSekolah === 'string' && sheetSettings.logoSekolah.length > 45000) {
+          delete sheetSettings.logoSekolah;
+        }
+        if (typeof sheetSettings.logoTs25 === 'string' && sheetSettings.logoTs25.length > 45000) {
+          delete sheetSettings.logoTs25;
+        }
+
         await fetch(webAppUrl.trim(), {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify({
             action: 'saveSettings',
             kod,
-            settings
+            settings: sheetSettings
           })
         });
       } catch (err) {
