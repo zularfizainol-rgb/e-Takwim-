@@ -14,7 +14,8 @@ import {
   RefreshCw, 
   Settings, 
   ShieldCheck, 
-  CalendarDays
+  CalendarDays,
+  Share2
 } from 'lucide-react';
 import { SchoolSettings, SyncState, UserRole } from '../types/takwim';
 import { SchoolLogoDisplay } from '../data/defaultLogos';
@@ -33,6 +34,7 @@ interface NavbarProps {
   onExportExcel: () => void;
   onExportICal: () => void;
   onPrint: () => void;
+  onOpenShareModal: () => void;
   onSwitchYear?: (year: number) => void;
 }
 
@@ -50,6 +52,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onExportExcel,
   onExportICal,
   onPrint,
+  onOpenShareModal,
   onSwitchYear
 }) => {
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
@@ -280,6 +283,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </>
                 )}
               </div>
+            )}
+
+            {/* 4. BUTANG KONGSI: HANYA DALAM MOD GPK */}
+            {!isViewOnly && (
+              <button
+                onClick={onOpenShareModal}
+                className="px-2.5 py-1.5 rounded-md border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-2xs"
+                title="Kongsi pautan e-Takwim kepada GPK lain dan guru-guru"
+              >
+                <Share2 className="w-3.5 h-3.5 text-teal-700" />
+                <span className="hidden sm:inline">Kongsi</span>
+              </button>
             )}
           </div>
 

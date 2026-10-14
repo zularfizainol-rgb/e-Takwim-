@@ -31,6 +31,7 @@ import { GoogleSheetModal } from './components/GoogleSheetModal';
 import { LoginModal } from './components/LoginModal';
 import { PrintTakwimView } from './components/PrintTakwimView';
 import { PrintModal } from './components/PrintModal';
+import { ShareModal } from './components/ShareModal';
 
 const DEFAULT_SETTINGS: SchoolSettings = {
   sekolah: 'SK Seri Bintang Selatan',
@@ -53,7 +54,23 @@ export default function App() {
   // Keadaan Aplikasi
   const [settings, setSettings] = useState<SchoolSettings>(() => {
     const local = AppsScriptService.getLocalSettings();
-    return { ...DEFAULT_SETTINGS, ...local };
+    const initial = { ...DEFAULT_SETTINGS, ...local };
+
+    // Semak pautan Google Sheet daripada URL parameter (?sheet=...)
+    if (typeof window !== 'undefined') {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const sheetParam = urlParams.get('sheet');
+        if (sheetParam && sheetParam.trim().length > 0) {
+          initial.googleWebAppUrl = sheetParam.trim();
+          AppsScriptService.saveSettings(initial, initial.kodEdit, initial.googleWebAppUrl);
+        }
+      } catch (err) {
+        console.error('Ralat membaca parameter URL:', err);
+      }
+    }
+
+    return initial;
   });
 
   const [rows, setRows] = useState<Record<string, TakwimRow>>({});
@@ -82,6 +99,7 @@ export default function App() {
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [googleSheetModalOpen, setGoogleSheetModalOpen] = useState(false);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
   const [printModalOpen, setPrintModalOpen] = useState(false);
   const [printMonth, setPrintMonth] = useState<number | 'all'>('all');
   const [isPreviewMode, setIsPreviewMode] = useState(false);
@@ -195,6 +213,17 @@ export default function App() {
   }, [settings.googleWebAppUrl, settings.tahun, settings.kumpulan]);
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const modeParam = urlParams.get('mode') || urlParams.get('role');
+        if (modeParam === 'gpk' || modeParam === 'admin' || modeParam === 'pentadbir') {
+          setLoginModalOpen(true);
+        }
+      } catch (e) {
+        // Abaikan
+      }
+    }
     loadData();
   }, []);
 
@@ -565,6 +594,7 @@ export default function App() {
           onExportExcel={() => exportToExcel(rows, allDatesOfYear, weeksMap, weekKeyFn, isWeekendFn, settings)}
           onExportICal={() => exportToICal(rows, allDatesOfYear, settings)}
           onPrint={() => setPrintModalOpen(true)}
+          onOpenShareModal={() => setShareModalOpen(true)}
           onSwitchYear={handleSwitchYear}
         />
 
@@ -717,6 +747,13 @@ export default function App() {
             setPrintMonth(scope);
             setIsPreviewMode(true);
           }}
+        />
+
+        <ShareModal
+          isOpen={shareModalOpen}
+          onClose={() => setShareModalOpen(false)}
+          settings={settings}
+          onOpenGoogleSheetModal={() => setGoogleSheetModalOpen(true)}
         />
       </div>
 
