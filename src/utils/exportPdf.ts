@@ -177,7 +177,7 @@ export async function generateTakwimPdf({
         ? '[CUTI PENGGAL KPM] '
         : r.j === 'LAIN'
         ? '[CUTI TAMBAHAN KPM] '
-        : '[HUJUNG MINGGU] ';
+        : '';
 
       const progs = [r.p, r.k, r.h, r.o].filter(Boolean).join(' | ');
 
@@ -217,11 +217,24 @@ export async function generateTakwimPdf({
       });
 
       // KANDUNGAN PROGRAM / CUTI
+      const isSabtu = dow === 6 || DAY_NAMES[dow] === 'Sabtu';
+
       if (isCuti) {
-        let cutiText = `${holidayPrefix}${holidayLabel}`;
-        if (progs) {
-          cutiText += `\n[Program: ${progs}]`;
+        let cutiText = '';
+        if (isSabtu && progs) {
+          // KHAS PROGRAM HARI SABTU: HANYA TULIS NAMA PROGRAM (JANGAN TULIS PROGRAM BERTINDIH / CUTI HUJUNG MINGGU)
+          if (r.j) {
+            cutiText = `${holidayPrefix}${holidayLabel}\n${progs}`;
+          } else {
+            cutiText = progs;
+          }
+        } else {
+          cutiText = `${holidayPrefix}${holidayLabel}`;
+          if (progs) {
+            cutiText += `\n${progs}`;
+          }
         }
+
         rowCells.push({
           content: cutiText,
           colSpan: 4,
@@ -229,8 +242,8 @@ export async function generateTakwimPdf({
             halign: 'center',
             valign: 'middle',
             fontStyle: 'bold',
-            fillColor: [248, 250, 252],
-            textColor: r.j === 'UMUM' ? [180, 20, 20] : [20, 40, 80]
+            fillColor: isSabtu && progs && !r.j ? [255, 255, 255] : [248, 250, 252],
+            textColor: r.j === 'UMUM' ? [180, 20, 20] : (isSabtu && progs ? [0, 0, 0] : [20, 40, 80])
           }
         });
       } else {

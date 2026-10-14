@@ -199,6 +199,7 @@ export const PrintTakwimView: React.FC<PrintTakwimViewProps> = ({
                     const isWeekStart = dateStr in weekRowSpanMap;
                     const rowSpan = weekRowSpanMap[dateStr];
 
+                    const isSabtu = dow === 6 || DAY_NAMES[dow] === 'Sabtu';
                     const holidayLabel = r.j ? (r.l || JENIS_CUTI[r.j]) : 'Cuti Hujung Minggu';
                     const holidayProgs = [r.p, r.k, r.h, r.o].filter(Boolean).join(' | ');
 
@@ -223,14 +224,35 @@ export const PrintTakwimView: React.FC<PrintTakwimViewProps> = ({
 
                         {isCuti ? (
                           <td colSpan={4} className="border border-black p-1 text-center align-middle font-bold">
-                            <div className="uppercase text-center">
-                              {r.j === 'UMUM' ? '[CUTI UMUM RASMI] ' : r.j === 'PENGGAL' ? '[CUTI PENGGAL KPM] ' : r.j === 'LAIN' ? '[CUTI TAMBAHAN KPM] ' : '[HUJUNG MINGGU] '}
-                              {holidayLabel}
-                            </div>
-                            {holidayProgs && (
-                              <span className="block font-semibold text-[7pt] mt-0.5 text-slate-800 text-center">
-                                [Program Bertindih: {holidayProgs}]
-                              </span>
+                            {isSabtu && holidayProgs ? (
+                              /* KHAS PROGRAM HARI SABTU: HANYA TULIS NAMA PROGRAM (JANGAN TULIS PROGRAM BERTINDIH / CUTI HUJUNG MINGGU) */
+                              r.j ? (
+                                <>
+                                  <div className="uppercase text-center text-[7.5pt] text-slate-700">
+                                    {r.j === 'UMUM' ? '[CUTI UMUM RASMI] ' : r.j === 'PENGGAL' ? '[CUTI PENGGAL KPM] ' : '[CUTI TAMBAHAN KPM] '}
+                                    {holidayLabel}
+                                  </div>
+                                  <div className="font-bold text-[8pt] text-black text-center whitespace-pre-line mt-0.5">
+                                    {holidayProgs}
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="font-bold text-[8pt] text-black text-center whitespace-pre-line">
+                                  {holidayProgs}
+                                </div>
+                              )
+                            ) : (
+                              <>
+                                <div className="uppercase text-center">
+                                  {r.j === 'UMUM' ? '[CUTI UMUM RASMI] ' : r.j === 'PENGGAL' ? '[CUTI PENGGAL KPM] ' : r.j === 'LAIN' ? '[CUTI TAMBAHAN KPM] ' : ''}
+                                  {holidayLabel}
+                                </div>
+                                {holidayProgs && (
+                                  <span className="block font-semibold text-[7.5pt] mt-0.5 text-slate-800 text-center whitespace-pre-line">
+                                    {holidayProgs}
+                                  </span>
+                                )}
+                              </>
                             )}
                           </td>
                         ) : (

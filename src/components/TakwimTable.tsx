@@ -266,7 +266,7 @@ export const TakwimTable: React.FC<TakwimTableProps> = ({
                         <div className="mt-2 p-2 bg-white/95 rounded-md border border-black/15 font-normal text-slate-900 shadow-xs w-full max-w-lg text-center">
                           <span className="font-bold text-teal-900 text-xs flex items-center justify-center gap-1 mb-0.5 text-center">
                             <Sparkles className="w-3.5 h-3.5 text-teal-600" />
-                            Aktiviti Sekolah Terancang:
+                            {dayOfWeek === 6 ? 'Program Hari Sabtu:' : 'Aktiviti Sekolah Terancang:'}
                           </span>
                           <div className="text-xs text-slate-800 leading-relaxed font-medium text-center">
                             {highlightMatches(holidayPrograms, searchQuery)}
