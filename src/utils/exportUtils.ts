@@ -225,3 +225,49 @@ function downloadBlob(blob: Blob, filename: string): void {
     a.remove();
   }, 1000);
 }
+
+/**
+ * Eksport sandaran penuh Takwim (Data + Tetapan) ke fail JSON
+ */
+export function exportBackupJSON(
+  rows: Record<string, TakwimRow>,
+  settings: SchoolSettings
+): void {
+  const backupData = {
+    app: 'e-Takwim Sekolah KPM',
+    version: '3.0',
+    exportDate: new Date().toISOString(),
+    settings,
+    rows
+  };
+
+  const jsonStr = JSON.stringify(backupData, null, 2);
+  const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' });
+  const safeSchoolName = (settings.sekolah || 'Sekolah').replace(/[^a-zA-Z0-9]/g, '_');
+  downloadBlob(blob, `Sandaran_Takwim_${safeSchoolName}_${settings.tahun}.json`);
+}
+
+/**
+ * Baca dan sahkan fail sandaran JSON
+ */
+export async function readBackupJSON(file: File): Promise<{
+  ok: boolean;
+  settings?: SchoolSettings;
+  rows?: Record<string, TakwimRow>;
+  error?: string;
+}> {
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    if (!data || (!data.rows && !data.settings)) {
+      return { ok: false, error: 'Format fail tidak sah. Sila pilih fail .json sandaran e-Takwim.' };
+    }
+    return {
+      ok: true,
+      settings: data.settings,
+      rows: data.rows
+    };
+  } catch (err: any) {
+    return { ok: false, error: 'Ralat membaca fail: ' + (err.message || 'Fail rosak') };
+  }
+}

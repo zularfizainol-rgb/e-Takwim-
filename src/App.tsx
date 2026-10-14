@@ -753,7 +753,18 @@ export default function App() {
           isOpen={shareModalOpen}
           onClose={() => setShareModalOpen(false)}
           settings={settings}
+          rows={rows}
           onOpenGoogleSheetModal={() => setGoogleSheetModalOpen(true)}
+          onSyncGoogleSheet={handleSyncGoogleSheet}
+          onImportBackup={(importedRows, importedSettings) => {
+            setRows(importedRows);
+            const mergedSettings = { ...settings, ...importedSettings };
+            setSettings(mergedSettings);
+            AppsScriptService.updateLocalRows(Object.values(importedRows), mergedSettings.tahun || settings.tahun);
+            AppsScriptService.saveSettings(mergedSettings, mergedSettings.kodEdit, mergedSettings.googleWebAppUrl);
+            setSyncState('SYNCED');
+            setSyncMessage('Data Sandaran Dipulihkan');
+          }}
         />
       </div>
 
