@@ -84,6 +84,7 @@ export default function App() {
   const [syncState, setSyncState] = useState<SyncState>('SYNCED');
   const [syncMessage, setSyncMessage] = useState('Memuatkan...');
   const dirtyRowsRef = useRef<Record<string, boolean>>({});
+  const dirtyFieldsRef = useRef<Record<string, Partial<TakwimRow>>>({});
   const saveTimeoutRef = useRef<any>(null);
 
   // Refs untuk memastikan flushDirtyRows sentiasa membaca nilai terkini tanpa masalah closure
@@ -207,6 +208,12 @@ export default function App() {
       setRows(rowMap);
       AppsScriptService.updateLocalRows(Object.values(rowMap), activeYear);
 
+      // Pastikan pelayan pusat sentiasa mempunyai data takwim untuk peranti lain (telefon pintar dll)
+      const hasCustomPrograms = Object.values(rowMap).some(r => Boolean(r.p || r.k || r.h || r.o));
+      if (hasCustomPrograms || res.source === 'cloud') {
+        AppsScriptService.syncToServer(rowMap, res.settings || settings, activeYear);
+      }
+
       setSyncState('SYNCED');
       setSyncMessage(res.source === 'cloud' ? `Disambung Google Sheet (${activeYear})` : `Cuti KPM Dimasukkan (${activeYear})`);
     } catch (err: any) {
@@ -230,17 +237,57 @@ export default function App() {
     loadData();
   }, []);
 
+  // Penyelarasan Latar Belakang Automatik (Background Polling serentak untuk semua GPK)
+  useEffect(() => {
+    if (!settings.googleWebAppUrl || settings.googleWebAppUrl.trim() === '') {
+      return;
+    }
+
+    const intervalId = setInterval(() => {
+      const hasPendingSaves = Object.keys(dirtyRowsRef.current).length > 0;
+      if (!hasPendingSaves) {
+        loadData(true);
+      }
+    }, 25000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        const hasPending = Object.keys(dirtyRowsRef.current).length > 0;
+        if (!hasPending) {
+          loadData(true);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [settings.googleWebAppUrl, loadData]);
+
   // Simpan baris yang diubah secara automatik (Debounced Auto-save)
   const flushDirtyRows = useCallback(async () => {
+    const dirtyFieldEntries = Object.values(dirtyFieldsRef.current);
     const dirtyKeys = Object.keys(dirtyRowsRef.current);
-    if (dirtyKeys.length === 0) return;
+    if (dirtyKeys.length === 0 && dirtyFieldEntries.length === 0) return;
 
     setSyncState('SAVING');
     setSyncMessage('Menyimpan perubahan...');
 
     const currentRows = rowsRef.current;
     const currentSettings = settingsRef.current;
-    const entriesToSave = dirtyKeys.map(k => currentRows[k]).filter(Boolean);
+
+    // Utamakan dirtyFieldsRef supaya hanya lajur yang diubah dihantar (mengelakkan bertindih dengan GPK lain)
+    const entriesToSave = dirtyFieldEntries.length > 0
+      ? (dirtyFieldEntries as TakwimRow[])
+      : dirtyKeys.map(k => currentRows[k]).filter(Boolean);
+
+    const savedFieldsBackup = { ...dirtyFieldsRef.current };
+    const savedKeysBackup = [...dirtyKeys];
+
+    dirtyFieldsRef.current = {};
     dirtyRowsRef.current = {};
 
     const res = await AppsScriptService.saveRows(
@@ -262,8 +309,9 @@ export default function App() {
     } else {
       setSyncState('ERROR');
       setSyncMessage(res.error || 'Gagal menyimpan');
-      // Kembalikan ke senarai dirty
-      dirtyKeys.forEach(k => { dirtyRowsRef.current[k] = true; });
+      // Kembalikan ke senarai dirty jika gagal
+      savedKeysBackup.forEach(k => { dirtyRowsRef.current[k] = true; });
+      Object.assign(dirtyFieldsRef.current, savedFieldsBackup);
     }
   }, []);
 
@@ -317,6 +365,7 @@ export default function App() {
         const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
         const cleanNote = res.duplicatesCleaned ? ' (Pertindihan Dicuci)' : '';
         setSyncMessage(`Sync Berjaya${cleanNote} (${timeStr})`);
+        await loadData(true);
       } else {
         setSyncState('ERROR');
         setSyncMessage(res.error || 'Gagal menyegerak ke Google Sheet');
@@ -384,6 +433,10 @@ export default function App() {
       const updated = { ...current, [colKey]: value };
       return { ...prev, [dateStr]: updated };
     });
+    if (!dirtyFieldsRef.current[dateStr]) {
+      dirtyFieldsRef.current[dateStr] = { d: dateStr };
+    }
+    dirtyFieldsRef.current[dateStr][colKey] = value;
     markRowDirty(dateStr);
   }, [markRowDirty]);
 
@@ -395,11 +448,16 @@ export default function App() {
         const current = next[d] || { d, j: '', l: '', p: '', k: '', h: '', o: '' };
         const existingLines = (current[colKey] || '').split('\n').filter(Boolean);
         if (!existingLines.includes(text)) {
+          const newVal = current[colKey] ? `${current[colKey]}\n${text}` : text;
           next[d] = {
             ...current,
-            [colKey]: current[colKey] ? `${current[colKey]}\n${text}` : text
+            [colKey]: newVal
           };
           dirtyRowsRef.current[d] = true;
+          if (!dirtyFieldsRef.current[d]) {
+            dirtyFieldsRef.current[d] = { d };
+          }
+          dirtyFieldsRef.current[d][colKey] = newVal;
         }
       });
       return next;
@@ -413,6 +471,7 @@ export default function App() {
   // Kemaskini satu tarikh dari EditDayModal
   const handleSaveDay = useCallback((updatedRow: TakwimRow) => {
     setRows(prev => ({ ...prev, [updatedRow.d]: updatedRow }));
+    dirtyFieldsRef.current[updatedRow.d] = { ...updatedRow };
     markRowDirty(updatedRow.d);
   }, [markRowDirty]);
 

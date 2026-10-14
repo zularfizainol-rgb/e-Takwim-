@@ -592,7 +592,44 @@ export class AppsScriptService {
       }
     }
 
-    // Fallback ke storan tempatan mengikut tahun
+    // 2. Semak dari Pelayan Pusat (/api/takwim) jika peranti baharu (cth: telefon pintar atau laptop lain)
+    try {
+      const serverRes = await fetch(`/api/takwim?year=${year}&_t=${Date.now()}`);
+      if (serverRes.ok) {
+        const serverData = await serverRes.json();
+        if (serverData && (serverData.settings || (serverData.rows && Object.keys(serverData.rows).length > 0))) {
+          const sRows = serverData.rows ? Object.values(serverData.rows) as TakwimRow[] : [];
+          
+          // Jika telefon/peranti belum ada URL Google Sheet, tetapi pelayan pusat ada:
+          if (serverData.settings?.googleWebAppUrl && (!webAppUrl || !webAppUrl.trim())) {
+            // Muat terus dari Google Sheet sekolah tersebut
+            try {
+              const cloudRes = await this.loadData(serverData.settings.googleWebAppUrl, year);
+              if (cloudRes.source === 'cloud') {
+                return cloudRes;
+              }
+            } catch (e) {
+              // Teruskan dengan data pelayan jika gagal
+            }
+          }
+
+          if (sRows.length > 0 || serverData.settings) {
+            const cachedSettings = this.getLocalSettings();
+            const mergedSettings = { ...cachedSettings, ...(serverData.settings || {}) };
+            localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(mergedSettings));
+            return {
+              rows: sRows.length > 0 ? sRows : this.getLocalRows(year),
+              settings: mergedSettings,
+              source: 'cloud'
+            };
+          }
+        }
+      }
+    } catch (e) {
+      // Abaikan jika luar talian / persekitaran tiada pelayan API
+    }
+
+    // 3. Fallback ke storan tempatan mengikut tahun
     const localRows = this.getLocalRows(year);
     const localSettings = this.getLocalSettings();
     return {
@@ -613,6 +650,17 @@ export class AppsScriptService {
   ): Promise<{ ok: boolean; source: 'cloud' | 'local'; error?: string; duplicatesCleaned?: boolean }> {
     // Simpan ke storan tempatan mengikut tahun untuk jaminan keselamatan data
     this.updateLocalRows(entries, year);
+
+    // Simpan salinan ke Pelayan Pusat (/api/takwim) supaya semua peranti (telefon dll) segera dapat data ini
+    try {
+      fetch('/api/takwim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entries, year })
+      }).catch(() => {});
+    } catch (e) {
+      // Abaikan jika luar talian
+    }
 
     if (webAppUrl && webAppUrl.trim().startsWith('http')) {
       try {
@@ -654,6 +702,17 @@ export class AppsScriptService {
     webAppUrl?: string
   ): Promise<{ ok: boolean }> {
     localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
+
+    // Simpan ke Pelayan Pusat (/api/settings)
+    try {
+      fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings })
+      }).catch(() => {});
+    } catch (e) {
+      // Abaikan jika luar talian
+    }
 
     if (webAppUrl && webAppUrl.trim().startsWith('http')) {
       try {
@@ -846,8 +905,34 @@ export class AppsScriptService {
       });
       const storageKey = this.getStorageKeyRows(year);
       localStorage.setItem(storageKey, JSON.stringify(Object.values(map)));
+
+      // Segerakkan ke Pelayan Pusat untuk peranti lain (telefon pintar dll)
+      try {
+        fetch('/api/takwim', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ entries: updatedEntries, year })
+        }).catch(() => {});
+      } catch (e) {
+        // Abaikan jika luar talian
+      }
     } catch (e) {
       console.warn('Gagal mengemas kini local storage', e);
+    }
+  }
+
+  /**
+   * Segerakkan takwim semasa ke pelayan pusat
+   */
+  static async syncToServer(rows: Record<string, TakwimRow>, settings?: Partial<SchoolSettings>, year: number = 2027): Promise<void> {
+    try {
+      await fetch('/api/takwim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows, settings, year })
+      });
+    } catch {
+      // Abaikan jika luar talian
     }
   }
 }
