@@ -39,6 +39,9 @@ export const GoogleSheetModal: React.FC<GoogleSheetModalProps> = ({
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [activeTab, setActiveTab] = useState<'setup' | 'code'>('setup');
 
+  const [isCleaning, setIsCleaning] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+
   if (!isOpen) return null;
 
   const handleCopyCode = () => {
@@ -53,6 +56,39 @@ export const GoogleSheetModal: React.FC<GoogleSheetModalProps> = ({
     const result = await AppsScriptService.testConnection(urlInput, settings.kodEdit || 'gpk2027');
     setTestResult(result);
     setTesting(false);
+  };
+
+  const handleCleanDuplicates = async () => {
+    if (!urlInput.trim()) return;
+    setIsCleaning(true);
+    setTestResult(null);
+    const result = await AppsScriptService.cleanDuplicates(
+      settings.kodEdit || 'gpk2027',
+      urlInput,
+      settings.tahun
+    );
+    setTestResult(result);
+    setIsCleaning(false);
+    if (result.ok) {
+      onForceSyncCloud();
+    }
+  };
+
+  const handleUploadAll = async () => {
+    if (!urlInput.trim()) return;
+    setIsUploading(true);
+    setTestResult(null);
+    const result = await AppsScriptService.initSheet(
+      Object.values(rows),
+      settings.kodEdit || 'gpk2027',
+      urlInput,
+      settings.tahun
+    );
+    setTestResult(result);
+    setIsUploading(false);
+    if (result.ok) {
+      onForceSyncCloud();
+    }
   };
 
   const handleSaveAndSync = () => {
@@ -96,7 +132,7 @@ export const GoogleSheetModal: React.FC<GoogleSheetModalProps> = ({
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            1. Pautan & Panduan Pemasangan
+            1. Pautan & Alat Pengurusan Lembaran
           </button>
           <button
             onClick={() => setActiveTab('code')}
@@ -107,7 +143,7 @@ export const GoogleSheetModal: React.FC<GoogleSheetModalProps> = ({
             }`}
           >
             <Code className="w-3.5 h-3.5" />
-            <span>2. Kod Sumber Apps Script (Code.gs)</span>
+            <span>2. Kod Sumber Apps Script (Code.gs v3)</span>
           </button>
         </div>
 
@@ -115,6 +151,19 @@ export const GoogleSheetModal: React.FC<GoogleSheetModalProps> = ({
         <div className="p-5 max-h-[70vh] overflow-y-auto text-xs space-y-4">
           {activeTab === 'setup' ? (
             <>
+              {/* Notis Penting untuk Masalah Pertindihan & Kemaskini */}
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 space-y-1">
+                <div className="font-bold flex items-center gap-1.5 text-xs text-amber-800">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Penyelesaian Masalah Pertindihan Data & Isu Kemaskini:</span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-amber-800">
+                  Pertindihan baris berlaku sekiranya Google Sheet anda masih menggunakan skrip versi lama. 
+                  Sila salin kod <strong>Code.gs Versi 3.0</strong> di tab sebelah, gantikan dalam Apps Script sekolah, 
+                  dan buat <strong>New Deployment</strong> (Who has access: Anyone).
+                </p>
+              </div>
+
               {/* Input URL Web App */}
               <div className="space-y-2 p-3.5 bg-slate-50 border border-slate-200 rounded-lg">
                 <label className="block font-bold text-slate-800 text-xs">
@@ -152,16 +201,43 @@ export const GoogleSheetModal: React.FC<GoogleSheetModalProps> = ({
                   </div>
                 )}
 
-                <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
-                  <span>Status semasa: {settings.googleWebAppUrl ? <strong className="text-teal-700">Terpaut</strong> : 'Mod Storan Tempatan (Offline)'}</span>
-                  {settings.googleWebAppUrl && (
-                    <button
-                      type="button"
-                      onClick={onForceSyncCloud}
-                      className="text-[#0b6b5c] hover:underline font-semibold"
-                    >
-                      Segerak Semula Dari Google Sheet
-                    </button>
+                {/* Butang Tindakan Segerak & Pembersihan */}
+                <div className="pt-2 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200/80">
+                  <span className="text-[11px] text-slate-600">
+                    Status: {settings.googleWebAppUrl ? <strong className="text-teal-700">Terpaut Aktif</strong> : 'Mod Storan Tempatan (Offline)'}
+                  </span>
+                  
+                  {urlInput.trim() && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={onForceSyncCloud}
+                        className="px-2.5 py-1 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded text-[11px] font-medium"
+                        title="Tarik data terkini daripada Google Sheet sekiranya terdapat suntingan terus di Google Sheet"
+                      >
+                        Tarik Data Dari Sheet
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCleanDuplicates}
+                        disabled={isCleaning}
+                        className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 disabled:bg-slate-300 text-white rounded text-[11px] font-medium flex items-center gap-1"
+                        title="Buang baris-baris bertindih dan kekalkan satu baris unik per tarikh"
+                      >
+                        {isCleaning && <RefreshCw className="w-3 h-3 animate-spin" />}
+                        <span>Bersihkan Pertindihan</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleUploadAll}
+                        disabled={isUploading}
+                        className="px-2.5 py-1 bg-[#0b6b5c] hover:bg-[#084f44] disabled:bg-slate-300 text-white rounded text-[11px] font-medium flex items-center gap-1"
+                        title="Muat naik semula 365 hari secara bersih dan teratur ke Google Sheet"
+                      >
+                        {isUploading && <RefreshCw className="w-3 h-3 animate-spin" />}
+                        <span>Muat Naik Semua Data Penuh</span>
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>

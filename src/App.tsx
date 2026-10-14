@@ -18,7 +18,7 @@ import {
   isWeekend, 
   MONTH_NAMES 
 } from './data/kpmCalendar';
-import { AppsScriptService } from './services/appsScriptService';
+import { AppsScriptService, normalizeDateKey } from './services/appsScriptService';
 import { exportToCSV, exportToExcel, exportToICal } from './utils/exportUtils';
 import { Navbar } from './components/Navbar';
 import { MonthTabs } from './components/MonthTabs';
@@ -68,6 +68,13 @@ export default function App() {
   const [syncMessage, setSyncMessage] = useState('Memuatkan...');
   const dirtyRowsRef = useRef<Record<string, boolean>>({});
   const saveTimeoutRef = useRef<any>(null);
+
+  // Refs untuk memastikan flushDirtyRows sentiasa membaca nilai terkini tanpa masalah closure
+  const rowsRef = useRef<Record<string, TakwimRow>>(rows);
+  rowsRef.current = rows;
+
+  const settingsRef = useRef<SchoolSettings>(settings);
+  settingsRef.current = settings;
 
   // Dialog Modal
   const [addModalOpen, setAddModalOpen] = useState(false);
@@ -129,31 +136,48 @@ export default function App() {
         };
       });
 
-      if (res.rows && res.rows.length > 0) {
-        // Gabungkan data sedia ada dengan cuti rasmi KPM yang terkini
-        res.rows.forEach(r => {
-          if (rowMap[r.d]) {
-            // Kekalkan program sekolah yang telah diisi oleh pentadbir/guru
-            rowMap[r.d].p = r.p || '';
-            rowMap[r.d].k = r.k || '';
-            rowMap[r.d].h = r.h || '';
-            rowMap[r.d].o = r.o || '';
+      // KEKALKAN data yang ada di skrin sekarang jika ada (mengelakkan data reset)
+      const currentRows = rowsRef.current || {};
+      Object.keys(currentRows).forEach(normD => {
+        if (rowMap[normD]) {
+          const r = currentRows[normD];
+          if (r.p) rowMap[normD].p = r.p;
+          if (r.k) rowMap[normD].k = r.k;
+          if (r.h) rowMap[normD].h = r.h;
+          if (r.o) rowMap[normD].o = r.o;
+          if (r.j) rowMap[normD].j = r.j;
+          if (r.l) rowMap[normD].l = r.l;
+        }
+      });
 
-            // Pastikan cuti rasmi KPM dimasukkan terus
-            const hol = officialHolidayMap[r.d];
-            if (hol) {
-              rowMap[r.d].j = hol.j;
-              rowMap[r.d].l = hol.l;
-            } else if (r.j) {
-              rowMap[r.d].j = r.j;
-              rowMap[r.d].l = r.l || '';
+      if (res.rows && res.rows.length > 0) {
+        // Gabungkan data sedia ada dengan normalisasi tarikh yang kalis ralat
+        res.rows.forEach(r => {
+          const normD = normalizeDateKey(r.d);
+          if (rowMap[normD]) {
+            // Kekalkan program sekolah yang telah diisi oleh pentadbir/guru
+            if (r.p !== undefined && r.p !== '') rowMap[normD].p = r.p;
+            if (r.k !== undefined && r.k !== '') rowMap[normD].k = r.k;
+            if (r.h !== undefined && r.h !== '') rowMap[normD].h = r.h;
+            if (r.o !== undefined && r.o !== '') rowMap[normD].o = r.o;
+
+            // Jika ada catatan cuti khusus dari Google Sheet, beri keutamaan
+            if (r.j) {
+              rowMap[normD].j = r.j;
+              rowMap[normD].l = r.l || '';
+            } else {
+              const hol = officialHolidayMap[normD];
+              if (hol) {
+                rowMap[normD].j = hol.j;
+                rowMap[normD].l = hol.l;
+              }
             }
           }
         });
       } else {
-        // Jana takwim awal lengkap dengan program perasmian sesi
+        // Jana takwim awal lengkap dengan program perasmian sesi jika helaian baru dan belum ada data
         const firstSchoolDay = settings.kumpulan === 'A' ? `${activeYear}-01-03` : `${activeYear}-01-04`;
-        if (rowMap[firstSchoolDay]) {
+        if (rowMap[firstSchoolDay] && !rowMap[firstSchoolDay].p) {
           rowMap[firstSchoolDay].p = `Hari Pertama Persekolahan Sesi ${activeYear}\nPerhimpunan Rasmi Pembukaan Sesi`;
           rowMap[firstSchoolDay].h = 'Orientasi & Pengurusan Kelas';
         }
@@ -182,14 +206,16 @@ export default function App() {
     setSyncState('SAVING');
     setSyncMessage('Menyimpan perubahan...');
 
-    const entriesToSave = dirtyKeys.map(k => rows[k]).filter(Boolean);
+    const currentRows = rowsRef.current;
+    const currentSettings = settingsRef.current;
+    const entriesToSave = dirtyKeys.map(k => currentRows[k]).filter(Boolean);
     dirtyRowsRef.current = {};
 
     const res = await AppsScriptService.saveRows(
       entriesToSave,
-      settings.kodEdit || 'gpk2027',
-      settings.googleWebAppUrl,
-      settings.tahun
+      currentSettings.kodEdit || 'gpk2027',
+      currentSettings.googleWebAppUrl,
+      currentSettings.tahun
     );
 
     if (res.ok) {
@@ -207,7 +233,66 @@ export default function App() {
       // Kembalikan ke senarai dirty
       dirtyKeys.forEach(k => { dirtyRowsRef.current[k] = true; });
     }
-  }, [rows, settings.kodEdit, settings.googleWebAppUrl, settings.tahun]);
+  }, []);
+
+  // Fungsi Manual "Sync Google Sheet": Hantar & segerakkan semua data semasa ke Google Sheet sekolah
+  const handleSyncGoogleSheet = useCallback(async () => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    if (!settings.googleWebAppUrl || settings.googleWebAppUrl.trim() === '') {
+      setSyncState('DIRTY');
+      setSyncMessage('Google Sheet belum disambung');
+      setSettingsModalOpen(true);
+      return;
+    }
+
+    setSyncState('SAVING');
+    setSyncMessage('Menyegerak ke Google Sheet...');
+
+    try {
+      const currentRows = rowsRef.current;
+      const currentSettings = settingsRef.current;
+
+      // Kumpul semua baris takwim yang mempunyai program atau cuti
+      const entriesToSync = Object.values(currentRows).filter(r => 
+        Boolean(
+          (r.p && r.p.trim() !== '') ||
+          (r.k && r.k.trim() !== '') ||
+          (r.h && r.h.trim() !== '') ||
+          (r.o && r.o.trim() !== '') ||
+          (r.j && r.j.trim() !== '') ||
+          dirtyRowsRef.current[r.d]
+        )
+      );
+
+      // Simpan terus ke Google Sheet
+      const res = await AppsScriptService.saveRows(
+        entriesToSync.length > 0 ? entriesToSync : Object.values(currentRows).slice(0, 5),
+        currentSettings.kodEdit || 'gpk2027',
+        currentSettings.googleWebAppUrl,
+        currentSettings.tahun
+      );
+
+      // Kemaskini juga storan tempatan
+      AppsScriptService.updateLocalRows(Object.values(currentRows), currentSettings.tahun);
+      dirtyRowsRef.current = {};
+
+      if (res.ok) {
+        setSyncState('SYNCED');
+        const now = new Date();
+        const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        setSyncMessage(`Sync Berjaya (${timeStr})`);
+      } else {
+        setSyncState('ERROR');
+        setSyncMessage(res.error || 'Gagal menyegerak ke Google Sheet');
+      }
+    } catch (err: any) {
+      setSyncState('ERROR');
+      setSyncMessage('Ralat sync: ' + (err.message || 'Gagal'));
+    }
+  }, [settings.googleWebAppUrl, settings.kodEdit, settings.tahun]);
 
   const markRowDirty = useCallback((dateStr: string) => {
     dirtyRowsRef.current[dateStr] = true;
@@ -471,7 +556,7 @@ export default function App() {
           currentRole={currentRole}
           syncState={syncState}
           syncMessage={syncMessage}
-          onRefresh={() => loadData(false)}
+          onSyncGoogleSheet={handleSyncGoogleSheet}
           onOpenAddModal={() => setAddModalOpen(true)}
           onOpenSettingsModal={() => setSettingsModalOpen(true)}
           onOpenLoginModal={() => setLoginModalOpen(true)}

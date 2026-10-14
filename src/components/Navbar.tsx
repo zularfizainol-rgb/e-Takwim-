@@ -24,7 +24,7 @@ interface NavbarProps {
   currentRole: UserRole;
   syncState: SyncState;
   syncMessage: string;
-  onRefresh: () => void;
+  onSyncGoogleSheet: () => void;
   onOpenAddModal: () => void;
   onOpenSettingsModal: () => void;
   onOpenLoginModal: () => void;
@@ -41,7 +41,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   currentRole,
   syncState,
   syncMessage,
-  onRefresh,
+  onSyncGoogleSheet,
   onOpenAddModal,
   onOpenSettingsModal,
   onOpenLoginModal,
@@ -175,16 +175,17 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Butang Tindakan Kalendar */}
           <div className="flex items-center gap-1.5">
-            {/* 1. JIKA DALAM MOD GPK: Muat Semula & Tambah Program */}
+            {/* 1. JIKA DALAM MOD GPK: Sync Google Sheet & Tambah Program */}
             {!isViewOnly && (
               <>
                 <button
-                  onClick={onRefresh}
-                  className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-md border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-medium flex items-center gap-1.5 transition-colors shadow-2xs"
-                  title="Ambil data terkini daripada Google Sheet atau Storan"
+                  onClick={onSyncGoogleSheet}
+                  disabled={syncState === 'SAVING'}
+                  className="px-2.5 py-1.5 rounded-md border border-teal-300 bg-teal-50 hover:bg-teal-100 text-teal-900 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-2xs disabled:opacity-50"
+                  title="Hantar dan segerakkan semua data semasa ke Google Sheet (Alternatif manual jika data belum update)"
                 >
-                  <RefreshCw className="w-3.5 h-3.5 text-slate-600" />
-                  <span className="hidden sm:inline">Muat Semula</span>
+                  <RefreshCw className={`w-3.5 h-3.5 text-teal-700 ${syncState === 'SAVING' ? 'animate-spin' : ''}`} />
+                  <span className="hidden sm:inline">Sync Google Sheet</span>
                 </button>
 
                 <button
