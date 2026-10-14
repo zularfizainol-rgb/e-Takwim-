@@ -143,13 +143,13 @@ export default function App() {
             ...prev,
             ...s,
             tahun: activeYear,
-            sekolah: (s.sekolah && s.sekolah !== 'SK Seri Bintang Selatan' && s.sekolah !== 'SEKOLAH KEBANGSAAN SERI BINTANG') ? s.sekolah : (prev.sekolah || DEFAULT_SETTINGS.sekolah),
-            kodSekolah: (s.kodSekolah && s.kodSekolah !== 'WBA0001') ? s.kodSekolah : (prev.kodSekolah || DEFAULT_SETTINGS.kodSekolah),
-            guruBesar: s.guruBesar || prev.guruBesar || DEFAULT_SETTINGS.guruBesar,
-            gpkPentadbiran: s.gpkPentadbiran || prev.gpkPentadbiran || DEFAULT_SETTINGS.gpkPentadbiran,
-            gpkKurikulum: s.gpkKurikulum || prev.gpkKurikulum || DEFAULT_SETTINGS.gpkKurikulum,
-            gpkHem: s.gpkHem || prev.gpkHem || DEFAULT_SETTINGS.gpkHem,
-            gpkKoko: s.gpkKoko || prev.gpkKoko || DEFAULT_SETTINGS.gpkKoko,
+            sekolah: s.sekolah || prev.sekolah,
+            kodSekolah: s.kodSekolah || prev.kodSekolah,
+            guruBesar: s.guruBesar !== undefined ? s.guruBesar : prev.guruBesar,
+            gpkPentadbiran: s.gpkPentadbiran !== undefined ? s.gpkPentadbiran : prev.gpkPentadbiran,
+            gpkKurikulum: s.gpkKurikulum !== undefined ? s.gpkKurikulum : prev.gpkKurikulum,
+            gpkHem: s.gpkHem !== undefined ? s.gpkHem : prev.gpkHem,
+            gpkKoko: s.gpkKoko !== undefined ? s.gpkKoko : prev.gpkKoko,
             logoSekolah: s.logoSekolah || prev.logoSekolah,
             logoTs25: s.logoTs25 || prev.logoTs25,
             paparLogoTs25: s.paparLogoTs25 !== undefined ? s.paparLogoTs25 : prev.paparLogoTs25
@@ -267,13 +267,13 @@ export default function App() {
             setSettings(prev => ({
               ...prev,
               ...s,
-              sekolah: (s.sekolah && s.sekolah !== 'SK Seri Bintang Selatan' && s.sekolah !== 'SEKOLAH KEBANGSAAN SERI BINTANG') ? s.sekolah : (prev.sekolah || DEFAULT_SETTINGS.sekolah),
-              kodSekolah: (s.kodSekolah && s.kodSekolah !== 'WBA0001') ? s.kodSekolah : (prev.kodSekolah || DEFAULT_SETTINGS.kodSekolah),
-              guruBesar: s.guruBesar || prev.guruBesar || DEFAULT_SETTINGS.guruBesar,
-              gpkPentadbiran: s.gpkPentadbiran || prev.gpkPentadbiran || DEFAULT_SETTINGS.gpkPentadbiran,
-              gpkKurikulum: s.gpkKurikulum || prev.gpkKurikulum || DEFAULT_SETTINGS.gpkKurikulum,
-              gpkHem: s.gpkHem || prev.gpkHem || DEFAULT_SETTINGS.gpkHem,
-              gpkKoko: s.gpkKoko || prev.gpkKoko || DEFAULT_SETTINGS.gpkKoko,
+              sekolah: s.sekolah || prev.sekolah,
+              kodSekolah: s.kodSekolah || prev.kodSekolah,
+              guruBesar: s.guruBesar !== undefined ? s.guruBesar : prev.guruBesar,
+              gpkPentadbiran: s.gpkPentadbiran !== undefined ? s.gpkPentadbiran : prev.gpkPentadbiran,
+              gpkKurikulum: s.gpkKurikulum !== undefined ? s.gpkKurikulum : prev.gpkKurikulum,
+              gpkHem: s.gpkHem !== undefined ? s.gpkHem : prev.gpkHem,
+              gpkKoko: s.gpkKoko !== undefined ? s.gpkKoko : prev.gpkKoko,
               logoSekolah: s.logoSekolah || prev.logoSekolah,
               logoTs25: s.logoTs25 || prev.logoTs25
             }));
@@ -532,6 +532,7 @@ export default function App() {
   const handleSaveSettings = useCallback(async (newSettings: SchoolSettings) => {
     const yearChanged = newSettings.tahun !== settings.tahun;
     setSettings(newSettings);
+    settingsRef.current = newSettings;
     setSyncState('SAVING');
     setSyncMessage('Menyimpan tetapan...');
     try {
@@ -892,6 +893,7 @@ export default function App() {
           onClose={() => setLoginModalOpen(false)}
           expectedCode={settings.kodEdit}
           onLoginSuccess={role => setCurrentRole(role)}
+          onOpenSettings={() => setSettingsModalOpen(true)}
         />
 
         <PrintModal

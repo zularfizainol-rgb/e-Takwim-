@@ -73,10 +73,10 @@ app.post('/api/takwim', (req, res) => {
       if (!cleanSettings.logoTs25 && existingSettings.logoTs25) {
         cleanSettings.logoTs25 = existingSettings.logoTs25;
       }
-      if ((!cleanSettings.sekolah || cleanSettings.sekolah === 'SK Seri Bintang Selatan' || cleanSettings.sekolah === 'SEKOLAH KEBANGSAAN SERI BINTANG') && existingSettings.sekolah) {
+      if (!cleanSettings.sekolah && existingSettings.sekolah) {
         cleanSettings.sekolah = existingSettings.sekolah;
       }
-      if ((!cleanSettings.kodSekolah || cleanSettings.kodSekolah === 'WBA0001') && existingSettings.kodSekolah) {
+      if (!cleanSettings.kodSekolah && existingSettings.kodSekolah) {
         cleanSettings.kodSekolah = existingSettings.kodSekolah;
       }
       db.settings = { ...existingSettings, ...cleanSettings };
@@ -116,38 +116,8 @@ app.post('/api/settings', (req, res) => {
     const db = readDB();
     if (settings) {
       const existingSettings = db.settings || {};
-      const cleanSettings = { ...settings };
-
-      // Jangan benarkan maklumat kosong atau default lapuk menimpa tetapan sekolah yang telah diisi
-      if (!cleanSettings.logoSekolah && existingSettings.logoSekolah) {
-        cleanSettings.logoSekolah = existingSettings.logoSekolah;
-      }
-      if (!cleanSettings.logoTs25 && existingSettings.logoTs25) {
-        cleanSettings.logoTs25 = existingSettings.logoTs25;
-      }
-      if ((!cleanSettings.sekolah || cleanSettings.sekolah === 'SK Seri Bintang Selatan' || cleanSettings.sekolah === 'SEKOLAH KEBANGSAAN SERI BINTANG') && existingSettings.sekolah) {
-        cleanSettings.sekolah = existingSettings.sekolah;
-      }
-      if ((!cleanSettings.kodSekolah || cleanSettings.kodSekolah === 'WBA0001') && existingSettings.kodSekolah) {
-        cleanSettings.kodSekolah = existingSettings.kodSekolah;
-      }
-      if (!cleanSettings.guruBesar && existingSettings.guruBesar) {
-        cleanSettings.guruBesar = existingSettings.guruBesar;
-      }
-      if (!cleanSettings.gpkPentadbiran && existingSettings.gpkPentadbiran) {
-        cleanSettings.gpkPentadbiran = existingSettings.gpkPentadbiran;
-      }
-      if (!cleanSettings.gpkKurikulum && existingSettings.gpkKurikulum) {
-        cleanSettings.gpkKurikulum = existingSettings.gpkKurikulum;
-      }
-      if (!cleanSettings.gpkHem && existingSettings.gpkHem) {
-        cleanSettings.gpkHem = existingSettings.gpkHem;
-      }
-      if (!cleanSettings.gpkKoko && existingSettings.gpkKoko) {
-        cleanSettings.gpkKoko = existingSettings.gpkKoko;
-      }
-
-      db.settings = { ...existingSettings, ...cleanSettings };
+      // Simpan terus tetapan yang dikemaskini oleh pengguna
+      db.settings = { ...existingSettings, ...settings };
       db.updatedAt = new Date().toISOString();
       writeDB(db);
     }

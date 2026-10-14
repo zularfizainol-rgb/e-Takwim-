@@ -58,8 +58,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const schoolFileInputRef = useRef<HTMLInputElement>(null);
   const ts25FileInputRef = useRef<HTMLInputElement>(null);
 
+  const prevIsOpenRef = useRef(false);
+
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !prevIsOpenRef.current) {
       setFormData({
         ...settings,
         paparLogoTs25: settings.paparLogoTs25 !== false
@@ -67,6 +69,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setResetConfirm(false);
       setTestResult(null);
     }
+    prevIsOpenRef.current = isOpen;
   }, [isOpen, settings]);
 
   if (!isOpen) return null;
@@ -102,14 +105,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     reader.onload = () => {
       if (typeof reader.result === 'string') {
         const rawResult = reader.result;
-        // Mampatkan imej menggunakan canvas supaya ringan (<35KB), jernih dan kalis ralat storan
+        // Mampatkan imej menggunakan canvas supaya ringan (<30KB), jernih dan muat dalam Google Sheet (<45,000 aksara)
         const img = new Image();
         img.onload = () => {
           try {
             const canvas = document.createElement('canvas');
-            const maxDim = 260;
-            let width = img.naturalWidth || img.width || 200;
-            let height = img.naturalHeight || img.height || 200;
+            const maxDim = 160;
+            let width = img.naturalWidth || img.width || 160;
+            let height = img.naturalHeight || img.height || 160;
 
             if (width > height) {
               if (width > maxDim) {
@@ -129,7 +132,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             if (ctx) {
               ctx.drawImage(img, 0, 0, width, height);
               const isPng = file.type === 'image/png';
-              const compressed = canvas.toDataURL(isPng ? 'image/png' : 'image/jpeg', 0.88);
+              let compressed = canvas.toDataURL(isPng ? 'image/png' : 'image/jpeg', 0.85);
+              // Jika data URL masih melebihi 35,000 aksara, mampatkan lagi sebagai JPEG berkualiti tinggi
+              if (compressed.length > 35000) {
+                compressed = canvas.toDataURL('image/jpeg', 0.82);
+              }
               setFormData(prev => ({
                 ...prev,
                 [targetKey]: compressed

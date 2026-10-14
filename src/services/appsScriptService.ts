@@ -599,11 +599,11 @@ export class AppsScriptService {
               ...centralSettings
             };
 
-            // Pastikan maklumat utama sekolah (nama, kod, logo) tidak hilang jika helaian Google Sheet tiada menyimpannya
-            if (centralSettings.sekolah && (!mergedSettings.sekolah || mergedSettings.sekolah === 'SEKOLAH KEBANGSAAN SERI BINTANG' || mergedSettings.sekolah === 'SK Seri Bintang Selatan')) {
+            // Pastikan maklumat utama sekolah (nama, kod, logo, pentadbir) dimuat daripada pelayan pusat jika ada
+            if (centralSettings.sekolah) {
               mergedSettings.sekolah = centralSettings.sekolah;
             }
-            if (centralSettings.kodSekolah && (!mergedSettings.kodSekolah || mergedSettings.kodSekolah === 'WBA0001')) {
+            if (centralSettings.kodSekolah) {
               mergedSettings.kodSekolah = centralSettings.kodSekolah;
             }
             if (centralSettings.logoSekolah) {
@@ -673,8 +673,11 @@ export class AppsScriptService {
           if (sRows.length > 0 || serverData.settings) {
             const cachedSettings = this.getLocalSettings();
             const mergedSettings = { ...cachedSettings, ...(serverData.settings || {}) };
-            if (serverData.settings?.sekolah && (!mergedSettings.sekolah || mergedSettings.sekolah === 'SK Seri Bintang Selatan' || mergedSettings.sekolah === 'SEKOLAH KEBANGSAAN SERI BINTANG')) {
+            if (serverData.settings?.sekolah) {
               mergedSettings.sekolah = serverData.settings.sekolah;
+            }
+            if (serverData.settings?.kodSekolah) {
+              mergedSettings.kodSekolah = serverData.settings.kodSekolah;
             }
             if (serverData.settings?.logoSekolah) {
               mergedSettings.logoSekolah = serverData.settings.logoSekolah;
@@ -792,19 +795,30 @@ export class AppsScriptService {
     try {
       localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
     } catch (e) {
+      console.warn('localStorage quota warning', e);
       try {
-        const compact = { ...settings, logoSekolah: '', logoTs25: '' };
+        const compact = { ...settings };
+        if (compact.logoSekolah && compact.logoSekolah.length > 60000) compact.logoSekolah = '';
+        if (compact.logoTs25 && compact.logoTs25.length > 60000) compact.logoTs25 = '';
         localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(compact));
       } catch {}
     }
 
     // Simpan ke Pelayan Pusat (/api/settings)
     try {
-      await fetch('/api/settings', {
+      const res = await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ settings })
       });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.settings) {
+          try {
+            localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(data.settings));
+          } catch {}
+        }
+      }
     } catch (e) {
       console.warn('Gagal menyimpan tetapan ke pelayan pusat:', e);
     }
