@@ -595,40 +595,47 @@ export class AppsScriptService {
             const cachedSettings = this.getLocalSettings();
             const mergedSettings: Partial<SchoolSettings> = {
               ...cachedSettings,
-              ...centralSettings,
-              ...(json.settings || {})
+              ...(json.settings || {}),
+              ...centralSettings
             };
 
             // Pastikan maklumat utama sekolah (nama, kod, logo) tidak hilang jika helaian Google Sheet tiada menyimpannya
-            if (centralSettings.sekolah && (!mergedSettings.sekolah || mergedSettings.sekolah === 'SEKOLAH KEBANGSAAN SERI BINTANG')) {
+            if (centralSettings.sekolah && (!mergedSettings.sekolah || mergedSettings.sekolah === 'SEKOLAH KEBANGSAAN SERI BINTANG' || mergedSettings.sekolah === 'SK Seri Bintang Selatan')) {
               mergedSettings.sekolah = centralSettings.sekolah;
             }
             if (centralSettings.kodSekolah && (!mergedSettings.kodSekolah || mergedSettings.kodSekolah === 'WBA0001')) {
               mergedSettings.kodSekolah = centralSettings.kodSekolah;
             }
-            if (centralSettings.logoSekolah && !mergedSettings.logoSekolah) {
+            if (centralSettings.logoSekolah) {
               mergedSettings.logoSekolah = centralSettings.logoSekolah;
             }
-            if (centralSettings.logoTs25 && !mergedSettings.logoTs25) {
+            if (centralSettings.logoTs25) {
               mergedSettings.logoTs25 = centralSettings.logoTs25;
             }
-            if (centralSettings.guruBesar && !mergedSettings.guruBesar) {
+            if (centralSettings.guruBesar) {
               mergedSettings.guruBesar = centralSettings.guruBesar;
             }
-            if (centralSettings.gpkPentadbiran && !mergedSettings.gpkPentadbiran) {
+            if (centralSettings.gpkPentadbiran) {
               mergedSettings.gpkPentadbiran = centralSettings.gpkPentadbiran;
             }
-            if (centralSettings.gpkKurikulum && !mergedSettings.gpkKurikulum) {
+            if (centralSettings.gpkKurikulum) {
               mergedSettings.gpkKurikulum = centralSettings.gpkKurikulum;
             }
-            if (centralSettings.gpkHem && !mergedSettings.gpkHem) {
+            if (centralSettings.gpkHem) {
               mergedSettings.gpkHem = centralSettings.gpkHem;
             }
-            if (centralSettings.gpkKoko && !mergedSettings.gpkKoko) {
+            if (centralSettings.gpkKoko) {
               mergedSettings.gpkKoko = centralSettings.gpkKoko;
             }
 
-            localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(mergedSettings));
+            try {
+              localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(mergedSettings));
+            } catch (storageErr) {
+              try {
+                const compact = { ...mergedSettings, logoSekolah: '', logoTs25: '' };
+                localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(compact));
+              } catch {}
+            }
             return {
               rows: json.rows,
               settings: mergedSettings,
@@ -666,7 +673,23 @@ export class AppsScriptService {
           if (sRows.length > 0 || serverData.settings) {
             const cachedSettings = this.getLocalSettings();
             const mergedSettings = { ...cachedSettings, ...(serverData.settings || {}) };
-            localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(mergedSettings));
+            if (serverData.settings?.sekolah && (!mergedSettings.sekolah || mergedSettings.sekolah === 'SK Seri Bintang Selatan' || mergedSettings.sekolah === 'SEKOLAH KEBANGSAAN SERI BINTANG')) {
+              mergedSettings.sekolah = serverData.settings.sekolah;
+            }
+            if (serverData.settings?.logoSekolah) {
+              mergedSettings.logoSekolah = serverData.settings.logoSekolah;
+            }
+            if (serverData.settings?.logoTs25) {
+              mergedSettings.logoTs25 = serverData.settings.logoTs25;
+            }
+            try {
+              localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(mergedSettings));
+            } catch (storageErr) {
+              try {
+                const compact = { ...mergedSettings, logoSekolah: '', logoTs25: '' };
+                localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(compact));
+              } catch {}
+            }
             return {
               rows: sRows.length > 0 ? sRows : this.getLocalRows(year),
               settings: mergedSettings,
@@ -751,17 +774,24 @@ export class AppsScriptService {
     kod: string,
     webAppUrl?: string
   ): Promise<{ ok: boolean }> {
-    localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
+    try {
+      localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
+    } catch (e) {
+      try {
+        const compact = { ...settings, logoSekolah: '', logoTs25: '' };
+        localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(compact));
+      } catch {}
+    }
 
     // Simpan ke Pelayan Pusat (/api/settings)
     try {
-      fetch('/api/settings', {
+      await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ settings })
-      }).catch(() => {});
+      });
     } catch (e) {
-      // Abaikan jika luar talian
+      console.warn('Gagal menyimpan tetapan ke pelayan pusat:', e);
     }
 
     if (webAppUrl && webAppUrl.trim().startsWith('http')) {

@@ -70,10 +70,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSaveSettings(formData);
-    onClose();
+    setSaving(true);
+    try {
+      await onSaveSettings(formData);
+      onClose();
+    } catch (err) {
+      console.error('Ralat menyimpan:', err);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleResetClick = () => {
@@ -93,10 +102,56 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === 'string') {
-        setFormData(prev => ({
-          ...prev,
-          [targetKey]: reader.result
-        }));
+        const rawResult = reader.result;
+        // Mampatkan imej menggunakan canvas supaya ringan (<35KB), jernih dan kalis ralat storan
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            const maxDim = 260;
+            let width = img.naturalWidth || img.width || 200;
+            let height = img.naturalHeight || img.height || 200;
+
+            if (width > height) {
+              if (width > maxDim) {
+                height = Math.round((height * maxDim) / width);
+                width = maxDim;
+              }
+            } else {
+              if (height > maxDim) {
+                width = Math.round((width * maxDim) / height);
+                height = maxDim;
+              }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, width, height);
+              const isPng = file.type === 'image/png';
+              const compressed = canvas.toDataURL(isPng ? 'image/png' : 'image/jpeg', 0.88);
+              setFormData(prev => ({
+                ...prev,
+                [targetKey]: compressed
+              }));
+              return;
+            }
+          } catch (err) {
+            console.warn('Gagal memampatkan imej:', err);
+          }
+          setFormData(prev => ({
+            ...prev,
+            [targetKey]: rawResult
+          }));
+        };
+        img.onerror = () => {
+          setFormData(prev => ({
+            ...prev,
+            [targetKey]: rawResult
+          }));
+        };
+        img.src = rawResult;
       }
     };
     reader.readAsDataURL(file);
@@ -678,10 +733,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </button>
             <button
               type="submit"
-              className="px-4 py-1.5 rounded-md bg-[#0b6b5c] hover:bg-[#084f44] text-white font-bold text-xs shadow-xs flex items-center gap-1.5 transition-colors"
+              disabled={saving}
+              className="px-4 py-1.5 rounded-md bg-[#0b6b5c] hover:bg-[#084f44] text-white font-bold text-xs shadow-xs flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer"
             >
-              <Save className="w-3.5 h-3.5" />
-              <span>Simpan Tetapan</span>
+              <Save className={`w-3.5 h-3.5 ${saving ? 'animate-spin' : ''}`} />
+              <span>{saving ? 'Menyimpan Tetapan...' : 'Simpan Tetapan'}</span>
             </button>
           </div>
         </form>

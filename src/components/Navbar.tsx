@@ -354,17 +354,15 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
 
-            {/* 3. Butang Tetapan (Hanya dalam Mod GPK / Pentadbir) */}
-            {!isViewOnly && (
-              <button
-                onClick={onOpenSettingsModal}
-                className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-800 text-xs sm:text-sm font-semibold flex items-center gap-1.5 transition-colors whitespace-nowrap shadow-xs"
-                title="Tetapan Sekolah, Logo TS25 & Integrasi Google Sheet"
-              >
-                <Settings className="w-4 h-4 text-slate-600" />
-                <span>Tetapan</span>
-              </button>
-            )}
+            {/* 3. Butang Tetapan */}
+            <button
+              onClick={isViewOnly ? onOpenLoginModal : onOpenSettingsModal}
+              className="px-2.5 sm:px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-800 text-xs sm:text-sm font-semibold flex items-center gap-1.5 transition-colors whitespace-nowrap shadow-xs cursor-pointer"
+              title={isViewOnly ? "Log masuk Mod GPK untuk mengemaskini Tetapan Sekolah & Logo" : "Tetapan Sekolah, Logo TS25 & Integrasi Google Sheet"}
+            >
+              <Settings className="w-4 h-4 text-slate-600" />
+              <span className="hidden sm:inline">Tetapan</span>
+            </button>
           </div>
         </div>
       </div>

@@ -34,15 +34,15 @@ import { PrintModal } from './components/PrintModal';
 import { ShareModal } from './components/ShareModal';
 
 const DEFAULT_SETTINGS: SchoolSettings = {
-  sekolah: 'SK Seri Bintang Selatan',
-  kodSekolah: 'WBA0001',
+  sekolah: 'SK AU KERAMAT',
+  kodSekolah: 'WBA0053',
   kumpulan: 'B',
-  tahun: 2027,
-  guruBesar: 'Haji Ahmad bin Mohd Yusof',
-  gpkPentadbiran: 'Puan Siti Rahmah binti Ismail',
-  gpkKurikulum: 'Puan Siti Rahmah binti Ismail',
+  tahun: 2026,
+  guruBesar: 'EN ZULKAIMI BIN MUHAMMAD',
+  gpkPentadbiran: 'EN IBRAHIM BIN MUSTAPHA',
+  gpkKurikulum: 'EN IBRAHIM BIN MUSTAPHA',
   gpkHem: 'Encik Rosli bin Hamzah',
-  gpkKoko: 'Puan Noraini binti Kamaruddin',
+  gpkKoko: 'EN MOHAMMAD FATHIYAKAN BIN ASMARA',
   kodEdit: 'gpk2027',
   googleWebAppUrl: '',
   logoSekolah: '',
@@ -63,7 +63,10 @@ export default function App() {
         const sheetParam = urlParams.get('sheet');
         if (sheetParam && sheetParam.trim().length > 0) {
           initial.googleWebAppUrl = sheetParam.trim();
-          AppsScriptService.saveSettings(initial, initial.kodEdit, initial.googleWebAppUrl);
+          // Simpan hanya ke localStorage tanpa memadamkan maklumat sekolah di pelayan pusat
+          try {
+            localStorage.setItem('etakwim_settings_v2', JSON.stringify(initial));
+          } catch {}
         }
       } catch (err) {
         console.error('Ralat membaca parameter URL:', err);
@@ -134,7 +137,19 @@ export default function App() {
     try {
       const res = await AppsScriptService.loadData(settings.googleWebAppUrl, activeYear);
       if (res.settings) {
-        setSettings(prev => ({ ...prev, ...res.settings, tahun: activeYear }));
+        setSettings(prev => {
+          const merged = { ...prev, ...res.settings, tahun: activeYear };
+          if (!merged.sekolah || merged.sekolah === 'SK Seri Bintang Selatan' || merged.sekolah === 'SEKOLAH KEBANGSAAN SERI BINTANG') {
+            merged.sekolah = prev.sekolah || DEFAULT_SETTINGS.sekolah;
+          }
+          if (!merged.logoSekolah && prev.logoSekolah) {
+            merged.logoSekolah = prev.logoSekolah;
+          }
+          if (!merged.logoTs25 && prev.logoTs25) {
+            merged.logoTs25 = prev.logoTs25;
+          }
+          return merged;
+        });
       }
 
       const activeDates = getAllDatesOfYear(activeYear);
@@ -236,20 +251,29 @@ export default function App() {
     }
 
     const initSettingsAndLoad = async () => {
+      let activeYear = DEFAULT_SETTINGS.tahun;
       try {
         const sRes = await fetch(`/api/settings?_t=${Date.now()}`);
         if (sRes.ok) {
           const sJson = await sRes.json();
           if (sJson && sJson.settings) {
-            setSettings(prev => ({ ...prev, ...sJson.settings }));
-            loadData(false, sJson.settings.tahun);
+            activeYear = sJson.settings.tahun || activeYear;
+            setSettings(prev => ({
+              ...prev,
+              ...sJson.settings,
+              sekolah: sJson.settings.sekolah || prev.sekolah || DEFAULT_SETTINGS.sekolah,
+              kodSekolah: sJson.settings.kodSekolah || prev.kodSekolah || DEFAULT_SETTINGS.kodSekolah,
+              logoSekolah: sJson.settings.logoSekolah || prev.logoSekolah,
+              logoTs25: sJson.settings.logoTs25 || prev.logoTs25
+            }));
+            await loadData(false, activeYear);
             return;
           }
         }
       } catch (e) {
         // Abaikan
       }
-      loadData();
+      loadData(false, activeYear);
     };
 
     initSettingsAndLoad();
@@ -497,8 +521,16 @@ export default function App() {
   const handleSaveSettings = useCallback(async (newSettings: SchoolSettings) => {
     const yearChanged = newSettings.tahun !== settings.tahun;
     setSettings(newSettings);
-    await AppsScriptService.saveSettings(newSettings, newSettings.kodEdit, newSettings.googleWebAppUrl);
-    setSyncMessage('Tetapan dikemas kini');
+    setSyncState('SAVING');
+    setSyncMessage('Menyimpan tetapan...');
+    try {
+      await AppsScriptService.saveSettings(newSettings, newSettings.kodEdit, newSettings.googleWebAppUrl);
+      setSyncState('SYNCED');
+      setSyncMessage('Tetapan berjaya disimpan!');
+    } catch (err: any) {
+      setSyncState('ERROR');
+      setSyncMessage('Ralat menyimpan tetapan: ' + (err.message || 'Gagal'));
+    }
     if (yearChanged) {
       loadData(false, newSettings.tahun);
     }

@@ -64,7 +64,22 @@ app.post('/api/takwim', (req, res) => {
     const db = readDB();
 
     if (settings) {
-      db.settings = { ...(db.settings || {}), ...settings };
+      const existingSettings = db.settings || {};
+      const cleanSettings = { ...settings };
+      // Jika logo kosong dalam kiriman tetapi sedia ada dalam pangkalan data, kekalkan logo sedia ada
+      if (!cleanSettings.logoSekolah && existingSettings.logoSekolah) {
+        cleanSettings.logoSekolah = existingSettings.logoSekolah;
+      }
+      if (!cleanSettings.logoTs25 && existingSettings.logoTs25) {
+        cleanSettings.logoTs25 = existingSettings.logoTs25;
+      }
+      if ((!cleanSettings.sekolah || cleanSettings.sekolah === 'SK Seri Bintang Selatan' || cleanSettings.sekolah === 'SEKOLAH KEBANGSAAN SERI BINTANG') && existingSettings.sekolah) {
+        cleanSettings.sekolah = existingSettings.sekolah;
+      }
+      if ((!cleanSettings.kodSekolah || cleanSettings.kodSekolah === 'WBA0001') && existingSettings.kodSekolah) {
+        cleanSettings.kodSekolah = existingSettings.kodSekolah;
+      }
+      db.settings = { ...existingSettings, ...cleanSettings };
     }
 
     if (rows && typeof rows === 'object') {
@@ -100,7 +115,21 @@ app.post('/api/settings', (req, res) => {
     const { settings } = req.body;
     const db = readDB();
     if (settings) {
-      db.settings = { ...(db.settings || {}), ...settings };
+      const existingSettings = db.settings || {};
+      const cleanSettings = { ...settings };
+      if (!cleanSettings.logoSekolah && existingSettings.logoSekolah) {
+        cleanSettings.logoSekolah = existingSettings.logoSekolah;
+      }
+      if (!cleanSettings.logoTs25 && existingSettings.logoTs25) {
+        cleanSettings.logoTs25 = existingSettings.logoTs25;
+      }
+      if ((!cleanSettings.sekolah || cleanSettings.sekolah === 'SK Seri Bintang Selatan' || cleanSettings.sekolah === 'SEKOLAH KEBANGSAAN SERI BINTANG') && existingSettings.sekolah) {
+        cleanSettings.sekolah = existingSettings.sekolah;
+      }
+      if ((!cleanSettings.kodSekolah || cleanSettings.kodSekolah === 'WBA0001') && existingSettings.kodSekolah) {
+        cleanSettings.kodSekolah = existingSettings.kodSekolah;
+      }
+      db.settings = { ...existingSettings, ...cleanSettings };
       db.updatedAt = new Date().toISOString();
       writeDB(db);
     }
